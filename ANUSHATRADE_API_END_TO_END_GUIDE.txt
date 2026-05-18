@@ -428,6 +428,230 @@ async function verifyOtpAndLogin(otp) {
 }
 
 
+2.10 Production onboarding APIs
+
+Use this flow for the new app/web signup journey:
+
+Landing Page
+   ↓
+Enter Mobile Number
+   ↓
+Send OTP with Firebase frontend SDK
+   ↓
+Verify OTP with Firebase frontend SDK
+   ↓
+Backend verifies Firebase ID token
+   ↓
+Email + Password + Legal Consents
+   ↓
+Create MPIN
+   ↓
+Optional Biometric Setup
+   ↓
+Complete KYC
+   ↓
+Link Bank Account
+   ↓
+Activate Account
+   ↓
+Open Dashboard
+
+Onboarding statuses:
+- OTP_VERIFIED
+- REGISTERED
+- MPIN_CREATED
+- KYC_PENDING
+- BANK_PENDING
+- ACTIVE
+
+Important:
+- Backend does not store raw OTP.
+- Backend verifies Firebase ID token.
+- Password and MPIN are hashed with BCrypt.
+- Weak MPIN patterns like 1111 and 1234 are rejected.
+- Investment APIs remain blocked until accountStatus is ACTIVE and KYC is APPROVED.
+
+
+2.10.1 Send OTP helper
+
+POST /api/auth/send-otp
+
+This endpoint validates mobile format and tells frontend to send OTP using Firebase.
+
+Request:
+
+{
+  "countryCode": "+91",
+  "mobileNumber": "9876543210"
+}
+
+Response example:
+
+{
+  "provider": "FIREBASE_PHONE_AUTH",
+  "message": "Send OTP from frontend using Firebase Phone Auth.",
+  "phoneNumber": "+919876543210",
+  "mobileNumber": "9876543210",
+  "userExists": false,
+  "nextStep": "VERIFY_OTP"
+}
+
+
+2.10.2 Verify OTP helper
+
+POST /api/auth/verify-otp
+
+Request:
+
+{
+  "idToken": "firebase-id-token-after-otp-verify"
+}
+
+Response:
+- If existing user: returns JWT tokens and nextStep.
+- If new user: returns userExists=false and nextStep=REGISTER.
+
+
+2.10.3 Register after mobile OTP
+
+POST /api/auth/onboarding/register
+
+Request:
+
+{
+  "idToken": "firebase-id-token-after-otp-verify",
+  "fullName": "Rahul Sharma",
+  "email": "rahul@example.com",
+  "password": "Strong@123",
+  "referredByCode": null,
+  "termsAccepted": true,
+  "privacyPolicyAccepted": true,
+  "kycConsentAccepted": true
+}
+
+Response example:
+
+{
+  "message": "Registration successful. Create MPIN to continue onboarding.",
+  "nextStep": "SET_MPIN",
+  "accessToken": "jwt-access-token",
+  "refreshToken": "refresh-token",
+  "role": "INVESTOR",
+  "userId": "user-id",
+  "accountStatus": "PENDING",
+  "onboardingStatus": "REGISTERED",
+  "kycStatus": "NOT_SUBMITTED"
+}
+
+
+2.10.4 Create MPIN
+
+POST /api/auth/set-mpin
+Role: INVESTOR
+
+Request:
+
+{
+  "mpin": "2580"
+}
+
+Example:
+
+curl -X POST "https://api.anushatrade.com/api/auth/set-mpin" ^
+  -H "Authorization: Bearer <INVESTOR_TOKEN>" ^
+  -H "Content-Type: application/json" ^
+  -d "{
+    \"mpin\": \"2580\"
+  }"
+
+
+2.10.5 Optional biometric setup
+
+POST /api/auth/enable-biometric
+Role: INVESTOR
+
+Request:
+
+{
+  "deviceId": "device-unique-id",
+  "enabled": true
+}
+
+Note:
+- Biometric fingerprint/Face ID data stays on the device OS.
+- Backend stores only the preference and device id.
+
+
+2.10.6 Complete KYC
+
+Use existing endpoint:
+
+POST /api/kyc/submit
+
+Send KYC files plus profile fields if they were not collected during registration:
+- panNumber
+- aadhaarLast4
+- dateOfBirth
+- address
+
+Admin must approve with:
+
+POST /api/admin/kyc/{id}/approve
+
+
+2.10.7 Link bank account
+
+POST /api/bank/verify
+Role: INVESTOR
+
+Request:
+
+{
+  "accountHolderName": "Rahul Sharma",
+  "bankAccountNumber": "123456789012",
+  "bankIfscCode": "HDFC0001234",
+  "bankName": "HDFC Bank"
+}
+
+Response example:
+
+{
+  "message": "Bank account linked successfully",
+  "nextStep": "ACTIVATE_ACCOUNT",
+  "bankVerified": true
+}
+
+Current implementation marks bank as verified directly. For production penny-drop, replace this endpoint internals with RazorpayX, Cashfree, Signzy, Digio, HyperVerge, or your banking provider.
+
+
+2.10.8 Activate account
+
+POST /api/auth/activate
+Role: INVESTOR
+
+Activation requires:
+- MPIN created
+- Terms accepted
+- Privacy policy accepted
+- KYC consent accepted
+- KYC status APPROVED
+- Bank account verified
+
+Example:
+
+curl -X POST "https://api.anushatrade.com/api/auth/activate" ^
+  -H "Authorization: Bearer <INVESTOR_TOKEN>"
+
+Success response:
+
+{
+  "message": "Account activated successfully",
+  "nextStep": "OPEN_DASHBOARD",
+  "accountStatus": "ACTIVE",
+  "onboardingStatus": "ACTIVE"
+}
+
+
 3. INVESTOR WEBSITE FLOW
 ------------------------
 
@@ -457,6 +681,12 @@ Required files:
 - selfiePhoto
 - bankPassbookOrStatement
 
+Required form fields when not already saved on user profile:
+- panNumber
+- aadhaarLast4
+- dateOfBirth
+- address
+
 Example:
 
 curl -X POST "https://api.anushatrade.com/api/kyc/submit" ^
@@ -465,7 +695,11 @@ curl -X POST "https://api.anushatrade.com/api/kyc/submit" ^
   -F "aadhaarFrontImage=@C:\files\aadhaar-front.jpg" ^
   -F "aadhaarBackImage=@C:\files\aadhaar-back.jpg" ^
   -F "selfiePhoto=@C:\files\selfie.jpg" ^
-  -F "bankPassbookOrStatement=@C:\files\bank.pdf"
+  -F "bankPassbookOrStatement=@C:\files\bank.pdf" ^
+  -F "panNumber=ABCDE1234F" ^
+  -F "aadhaarLast4=1234" ^
+  -F "dateOfBirth=1995-04-15" ^
+  -F "address=Hyderabad, Telangana"
 
 
 3.2 Get KYC status
@@ -1161,16 +1395,19 @@ Response contains:
 Use this sequence when connecting frontend website and admin panel.
 
 Investor website:
-1. POST /api/auth/register
-2. GET /api/auth/verify-email?token=<token>
-3. POST /api/auth/login
-4. POST /api/kyc/submit
-5. GET /api/kyc/status
-6. GET /api/plans
-7. POST /api/investments/apply
-8. POST /api/investments/{id}/upload-receipt
-9. GET /api/investments
-10. GET /api/dashboard
+1. POST /api/auth/send-otp
+2. Frontend sends OTP with Firebase
+3. Frontend verifies OTP with Firebase
+4. POST /api/auth/verify-otp
+5. POST /api/auth/onboarding/register
+6. POST /api/auth/set-mpin
+7. POST /api/kyc/submit
+8. POST /api/bank/verify
+9. POST /api/auth/activate
+10. GET /api/plans
+11. POST /api/investments/apply
+12. POST /api/investments/{id}/upload-receipt
+13. GET /api/dashboard
 
 Admin panel:
 1. POST /api/auth/login

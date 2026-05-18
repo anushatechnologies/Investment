@@ -82,7 +82,9 @@ public class PlatformService {
 
     @Transactional
     public KycSubmission submitKyc(User user, MultipartFile panCard, MultipartFile aadhaarFront, MultipartFile aadhaarBack,
-                                   MultipartFile selfiePhoto, MultipartFile bankProof, HttpServletRequest request) {
+                                   MultipartFile selfiePhoto, MultipartFile bankProof, String panNumber,
+                                   String aadhaarLast4, LocalDate dateOfBirth, String address, HttpServletRequest request) {
+        completeMissingKycProfile(user, panNumber, aadhaarLast4, dateOfBirth, address);
         KycSubmission kyc = kycSubmissionRepository.findTopByUserIdOrderBySubmittedAtDesc(user.getId()).orElseGet(KycSubmission::new);
         kyc.setId(kyc.getId() == null ? UUID.randomUUID().toString() : kyc.getId());
         kyc.setUserId(user.getId());
@@ -97,12 +99,47 @@ public class PlatformService {
         kyc.setReviewedAt(null);
         kyc.setRejectionReason(null);
         user.setKycStatus(DomainEnums.KycStatus.PENDING);
+        user.setOnboardingStatus(DomainEnums.OnboardingStatus.KYC_PENDING);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         KycSubmission saved = kycSubmissionRepository.save(kyc);
         notifyUser(user.getId(), "KYC submitted", "Your KYC documents are under review.", DomainEnums.NotificationType.KYC_UPDATE);
         auditService.log(user, "KYC_SUBMITTED", "KycSubmission", saved.getId(), null, "PENDING", request);
         return saved;
+    }
+
+    private void completeMissingKycProfile(User user, String panNumber, String aadhaarLast4, LocalDate dateOfBirth, String address) {
+        if (isBlank(user.getPanNumber())) {
+            if (isBlank(panNumber)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PAN number is required for KYC");
+            }
+            user.setPanNumber(panNumber);
+        }
+        if (isBlank(user.getAadhaarLast4())) {
+            if (isBlank(aadhaarLast4) || !aadhaarLast4.matches("\\d{4}")) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aadhaar last 4 digits are required for KYC");
+            }
+            user.setAadhaarLast4(aadhaarLast4);
+        }
+        if (user.getDateOfBirth() == null) {
+            if (dateOfBirth == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Date of birth is required for KYC");
+            }
+            if (dateOfBirth.isAfter(LocalDate.now().minusYears(18))) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investor must be at least 18 years old");
+            }
+            user.setDateOfBirth(dateOfBirth);
+        }
+        if (isBlank(user.getAddress())) {
+            if (isBlank(address)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Address is required for KYC");
+            }
+            user.setAddress(address);
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     public Map<String, Object> getOwnKycStatus(User user) {
@@ -126,6 +163,9 @@ public class PlatformService {
         kyc.setReviewedAt(LocalDateTime.now());
         kyc.setAdminNotes(notes);
         user.setKycStatus(DomainEnums.KycStatus.APPROVED);
+        user.setOnboardingStatus(user.isBankVerified()
+                ? DomainEnums.OnboardingStatus.BANK_PENDING
+                : DomainEnums.OnboardingStatus.KYC_PENDING);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         KycSubmission saved = kycSubmissionRepository.save(kyc);
@@ -144,6 +184,7 @@ public class PlatformService {
         kyc.setRejectionReason(body.reason());
         kyc.setAdminNotes(body.adminNotes());
         user.setKycStatus(DomainEnums.KycStatus.REJECTED);
+        user.setOnboardingStatus(DomainEnums.OnboardingStatus.KYC_PENDING);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         KycSubmission saved = kycSubmissionRepository.save(kyc);

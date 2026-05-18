@@ -36,6 +36,17 @@ public class AuthController {
         return authService.login(request, servletRequest);
     }
 
+    @PostMapping("/send-otp")
+    public Map<String, Object> sendOtp(@Valid @RequestBody ApiDtos.SendOtpRequest request) {
+        return authService.sendOtp(request);
+    }
+
+    @PostMapping("/verify-otp")
+    public Map<String, Object> verifyOtp(@Valid @RequestBody ApiDtos.VerifyOtpRequest request,
+                                         HttpServletRequest servletRequest) {
+        return authService.verifyOtp(request, servletRequest);
+    }
+
     @PostMapping("/firebase-mobile/login")
     public Map<String, Object> firebaseMobileLogin(@Valid @RequestBody ApiDtos.FirebaseMobileLoginRequest request,
                                                    HttpServletRequest servletRequest) {
@@ -46,6 +57,30 @@ public class AuthController {
     public Map<String, Object> firebaseMobileRegister(@Valid @RequestBody ApiDtos.FirebaseMobileRegisterRequest request,
                                                       HttpServletRequest servletRequest) {
         return authService.firebaseMobileRegister(request, servletRequest);
+    }
+
+    @PostMapping("/onboarding/register")
+    public Map<String, Object> mobileOnboardingRegister(@Valid @RequestBody ApiDtos.MobileOnboardingRegisterRequest request,
+                                                        HttpServletRequest servletRequest) {
+        return authService.mobileOnboardingRegister(request, servletRequest);
+    }
+
+    @PostMapping("/set-mpin")
+    public Map<String, Object> setMpin(@Valid @RequestBody ApiDtos.SetMpinRequest request,
+                                       HttpServletRequest servletRequest) {
+        return authService.setMpin(currentUserService.requireCurrentUser(), request, servletRequest);
+    }
+
+    @PostMapping("/enable-biometric")
+    public Map<String, Object> enableBiometric(@Valid @RequestBody ApiDtos.EnableBiometricRequest request,
+                                               HttpServletRequest servletRequest) {
+        return authService.enableBiometric(currentUserService.requireCurrentUser(), request, servletRequest);
+    }
+
+    @PostMapping("/activate")
+    public Map<String, Object> activate(@Valid @RequestBody(required = false) Map<String, Object> ignored,
+                                        HttpServletRequest servletRequest) {
+        return authService.activateOnboarding(currentUserService.requireCurrentUser(), servletRequest);
     }
 
     @PostMapping("/refresh-token")

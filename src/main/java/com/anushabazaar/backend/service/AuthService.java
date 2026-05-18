@@ -93,11 +93,20 @@ public class AuthService {
         user.setReferredByCode(request.referredByCode());
         user.setKycStatus(DomainEnums.KycStatus.NOT_SUBMITTED);
         user.setAccountStatus(DomainEnums.AccountStatus.PENDING);
+        user.setOnboardingStatus(DomainEnums.OnboardingStatus.REGISTERED);
         user.setRole(DomainEnums.Role.INVESTOR);
         user.setRiskDisclosureAccepted(true);
         user.setRiskDisclosureDate(LocalDateTime.now());
         user.setInvestorAgreementAccepted(true);
         user.setInvestorAgreementDate(LocalDateTime.now());
+        user.setTermsAccepted(true);
+        user.setTermsAcceptedAt(LocalDateTime.now());
+        user.setPrivacyPolicyAccepted(true);
+        user.setPrivacyPolicyAcceptedAt(LocalDateTime.now());
+        user.setKycConsentAccepted(true);
+        user.setKycConsentAcceptedAt(LocalDateTime.now());
+        user.setBankVerified(true);
+        user.setBankVerifiedAt(LocalDateTime.now());
         user.setEmailVerified(false);
         user.setFailedLoginAttempts(0);
         user.setCreatedAt(LocalDateTime.now());
@@ -139,6 +148,7 @@ public class AuthService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         user.setEmailVerified(true);
         user.setAccountStatus(DomainEnums.AccountStatus.ACTIVE);
+        user.setOnboardingStatus(DomainEnums.OnboardingStatus.ACTIVE);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         record.setUsed(true);
@@ -188,6 +198,24 @@ public class AuthService {
         );
     }
 
+    public Map<String, Object> sendOtp(ApiDtos.SendOtpRequest request) {
+        String countryCode = request.countryCode() == null || request.countryCode().isBlank() ? "+91" : request.countryCode();
+        boolean userExists = userRepository.findByMobileNumber(request.mobileNumber()).isPresent();
+        return Map.of(
+                "provider", "FIREBASE_PHONE_AUTH",
+                "message", "Send OTP from frontend using Firebase Phone Auth.",
+                "phoneNumber", countryCode + request.mobileNumber(),
+                "mobileNumber", request.mobileNumber(),
+                "userExists", userExists,
+                "nextStep", "VERIFY_OTP"
+        );
+    }
+
+    @Transactional
+    public Map<String, Object> verifyOtp(ApiDtos.VerifyOtpRequest request, HttpServletRequest servletRequest) {
+        return firebaseMobileLogin(new ApiDtos.FirebaseMobileLoginRequest(request.idToken()), servletRequest);
+    }
+
     @Transactional
     public Map<String, Object> firebaseMobileLogin(ApiDtos.FirebaseMobileLoginRequest request, HttpServletRequest servletRequest) {
         FirebasePhoneAuthService.VerifiedFirebasePhone verifiedPhone = firebasePhoneAuthService.verifyPhoneToken(request.idToken());
@@ -201,7 +229,7 @@ public class AuthService {
                     auditService.log(user, "FIREBASE_MOBILE_LOGIN", "User", user.getId(), null, verifiedPhone.mobileNumber(), servletRequest);
                     Map<String, Object> response = authResponse(user);
                     response.put("userExists", true);
-                    response.put("nextStep", user.getKycStatus() == DomainEnums.KycStatus.APPROVED ? "OPEN_DASHBOARD" : "COMPLETE_KYC");
+                    response.put("nextStep", nextOnboardingStep(user));
                     return response;
                 })
                 .orElseGet(() -> {
@@ -247,12 +275,21 @@ public class AuthService {
         user.setReferralCode(UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase());
         user.setReferredByCode(request.referredByCode());
         user.setKycStatus(DomainEnums.KycStatus.NOT_SUBMITTED);
-        user.setAccountStatus(DomainEnums.AccountStatus.ACTIVE);
+        user.setAccountStatus(DomainEnums.AccountStatus.PENDING);
+        user.setOnboardingStatus(DomainEnums.OnboardingStatus.REGISTERED);
         user.setRole(DomainEnums.Role.INVESTOR);
         user.setRiskDisclosureAccepted(true);
         user.setRiskDisclosureDate(LocalDateTime.now());
         user.setInvestorAgreementAccepted(true);
         user.setInvestorAgreementDate(LocalDateTime.now());
+        user.setTermsAccepted(true);
+        user.setTermsAcceptedAt(LocalDateTime.now());
+        user.setPrivacyPolicyAccepted(true);
+        user.setPrivacyPolicyAcceptedAt(LocalDateTime.now());
+        user.setKycConsentAccepted(true);
+        user.setKycConsentAcceptedAt(LocalDateTime.now());
+        user.setBankVerified(true);
+        user.setBankVerifiedAt(LocalDateTime.now());
         user.setEmailVerified(true);
         user.setFailedLoginAttempts(0);
         user.setLastLoginAt(LocalDateTime.now());
@@ -278,9 +315,139 @@ public class AuthService {
 
         Map<String, Object> response = authResponse(user);
         response.put("userExists", true);
-        response.put("nextStep", "COMPLETE_KYC");
-        response.put("message", "Registration successful. Complete KYC to start investing.");
+        response.put("nextStep", "SET_MPIN");
+        response.put("message", "Registration successful. Create MPIN to continue onboarding.");
         return response;
+    }
+
+    @Transactional
+    public Map<String, Object> mobileOnboardingRegister(ApiDtos.MobileOnboardingRegisterRequest request, HttpServletRequest servletRequest) {
+        FirebasePhoneAuthService.VerifiedFirebasePhone verifiedPhone = firebasePhoneAuthService.verifyPhoneToken(request.idToken());
+        if (userRepository.findByMobileNumber(verifiedPhone.mobileNumber()).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mobile number already exists");
+        }
+        if (userRepository.findByEmail(request.email().toLowerCase()).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
+        }
+        if (!request.termsAccepted() || !request.privacyPolicyAccepted() || !request.kycConsentAccepted()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Terms, privacy policy, and KYC consent must be accepted");
+        }
+
+        User user = new User();
+        user.setId(UUID.randomUUID().toString());
+        user.setFullName(request.fullName());
+        user.setEmail(request.email().toLowerCase());
+        user.setMobileNumber(verifiedPhone.mobileNumber());
+        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.setReferralCode(UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase());
+        user.setReferredByCode(request.referredByCode());
+        user.setKycStatus(DomainEnums.KycStatus.NOT_SUBMITTED);
+        user.setAccountStatus(DomainEnums.AccountStatus.PENDING);
+        user.setOnboardingStatus(DomainEnums.OnboardingStatus.REGISTERED);
+        user.setRole(DomainEnums.Role.INVESTOR);
+        user.setRiskDisclosureAccepted(true);
+        user.setRiskDisclosureDate(LocalDateTime.now());
+        user.setInvestorAgreementAccepted(true);
+        user.setInvestorAgreementDate(LocalDateTime.now());
+        user.setTermsAccepted(true);
+        user.setTermsAcceptedAt(LocalDateTime.now());
+        user.setPrivacyPolicyAccepted(true);
+        user.setPrivacyPolicyAcceptedAt(LocalDateTime.now());
+        user.setKycConsentAccepted(true);
+        user.setKycConsentAcceptedAt(LocalDateTime.now());
+        user.setEmailVerified(true);
+        user.setFailedLoginAttempts(0);
+        user.setLastLoginAt(LocalDateTime.now());
+        user.setLastLoginIp(servletRequest.getRemoteAddr());
+        user.setCreatedAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now());
+        user.setCreatedBy("FIREBASE_PHONE_ONBOARDING");
+        userRepository.save(user);
+
+        Wallet wallet = new Wallet();
+        wallet.setId(UUID.randomUUID().toString());
+        wallet.setUserId(user.getId());
+        wallet.setAvailableBalance(BigDecimal.ZERO);
+        wallet.setLockedBalance(BigDecimal.ZERO);
+        wallet.setTotalCredited(BigDecimal.ZERO);
+        wallet.setTotalDebited(BigDecimal.ZERO);
+        wallet.setVersionValue(0L);
+        wallet.setLastUpdatedAt(LocalDateTime.now());
+        walletRepository.save(wallet);
+
+        createReferralLinks(user);
+        auditService.log(user, "MOBILE_ONBOARDING_REGISTERED", "User", user.getId(), null, verifiedPhone.mobileNumber(), servletRequest);
+
+        Map<String, Object> response = authResponse(user);
+        response.put("userExists", true);
+        response.put("nextStep", "SET_MPIN");
+        response.put("message", "Registration successful. Create MPIN to continue onboarding.");
+        return response;
+    }
+
+    @Transactional
+    public Map<String, Object> setMpin(User user, ApiDtos.SetMpinRequest request, HttpServletRequest servletRequest) {
+        if (isWeakMpin(request.mpin())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN cannot be a simple or repeated pattern");
+        }
+        user.setMpinHash(passwordEncoder.encode(request.mpin()));
+        user.setOnboardingStatus(DomainEnums.OnboardingStatus.MPIN_CREATED);
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        auditService.log(user, "MPIN_CREATED", "User", user.getId(), null, "MPIN_CREATED", servletRequest);
+        return onboardingResponse(user, "COMPLETE_KYC", "MPIN created successfully");
+    }
+
+    @Transactional
+    public Map<String, Object> enableBiometric(User user, ApiDtos.EnableBiometricRequest request, HttpServletRequest servletRequest) {
+        user.setBiometricEnabled(request.enabled());
+        user.setBiometricDeviceId(request.enabled() ? request.deviceId() : null);
+        user.setBiometricEnabledAt(request.enabled() ? LocalDateTime.now() : null);
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        auditService.log(user, request.enabled() ? "BIOMETRIC_ENABLED" : "BIOMETRIC_DISABLED", "User", user.getId(), null, request.deviceId(), servletRequest);
+        return onboardingResponse(user, nextOnboardingStep(user), "Biometric preference updated");
+    }
+
+    @Transactional
+    public Map<String, Object> verifyBank(User user, ApiDtos.VerifyBankRequest request, HttpServletRequest servletRequest) {
+        user.setBankAccountNumber(request.bankAccountNumber());
+        user.setBankIfscCode(request.bankIfscCode());
+        user.setBankName(request.bankName());
+        if (user.getFullName() == null || user.getFullName().isBlank()) {
+            user.setFullName(request.accountHolderName());
+        }
+        user.setBankVerified(true);
+        user.setBankVerifiedAt(LocalDateTime.now());
+        if (user.getKycStatus() == DomainEnums.KycStatus.APPROVED) {
+            user.setOnboardingStatus(DomainEnums.OnboardingStatus.BANK_PENDING);
+        }
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        auditService.log(user, "BANK_VERIFIED", "User", user.getId(), null, request.bankIfscCode(), servletRequest);
+        return onboardingResponse(user, nextOnboardingStep(user), "Bank account linked successfully");
+    }
+
+    @Transactional
+    public Map<String, Object> activateOnboarding(User user, HttpServletRequest servletRequest) {
+        if (user.getMpinHash() == null || user.getMpinHash().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Create MPIN before activation");
+        }
+        if (!user.isTermsAccepted() || !user.isPrivacyPolicyAccepted() || !user.isKycConsentAccepted()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Required legal consents are missing");
+        }
+        if (user.getKycStatus() != DomainEnums.KycStatus.APPROVED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "KYC must be approved before activation");
+        }
+        if (!user.isBankVerified()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bank account must be verified before activation");
+        }
+        user.setAccountStatus(DomainEnums.AccountStatus.ACTIVE);
+        user.setOnboardingStatus(DomainEnums.OnboardingStatus.ACTIVE);
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        auditService.log(user, "ACCOUNT_ACTIVATED", "User", user.getId(), null, "ACTIVE", servletRequest);
+        return onboardingResponse(user, "OPEN_DASHBOARD", "Account activated successfully");
     }
 
     private void ensureMobileLoginAllowed(User user) {
@@ -299,7 +466,47 @@ public class AuthService {
         response.put("userId", user.getId());
         response.put("kycStatus", user.getKycStatus());
         response.put("accountStatus", user.getAccountStatus());
+        response.put("onboardingStatus", user.getOnboardingStatus());
+        response.put("bankVerified", user.isBankVerified());
+        response.put("mpinCreated", user.getMpinHash() != null && !user.getMpinHash().isBlank());
         return response;
+    }
+
+    private Map<String, Object> onboardingResponse(User user, String nextStep, String message) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", message);
+        response.put("nextStep", nextStep);
+        response.put("userId", user.getId());
+        response.put("accountStatus", user.getAccountStatus());
+        response.put("onboardingStatus", user.getOnboardingStatus());
+        response.put("kycStatus", user.getKycStatus());
+        response.put("bankVerified", user.isBankVerified());
+        response.put("mpinCreated", user.getMpinHash() != null && !user.getMpinHash().isBlank());
+        response.put("biometricEnabled", user.isBiometricEnabled());
+        return response;
+    }
+
+    private String nextOnboardingStep(User user) {
+        if (user.getAccountStatus() == DomainEnums.AccountStatus.ACTIVE && user.getKycStatus() == DomainEnums.KycStatus.APPROVED) {
+            return "OPEN_DASHBOARD";
+        }
+        if (user.getMpinHash() == null || user.getMpinHash().isBlank()) {
+            return "SET_MPIN";
+        }
+        if (user.getKycStatus() != DomainEnums.KycStatus.APPROVED) {
+            return "COMPLETE_KYC";
+        }
+        if (!user.isBankVerified()) {
+            return "VERIFY_BANK";
+        }
+        return "ACTIVATE_ACCOUNT";
+    }
+
+    private boolean isWeakMpin(String mpin) {
+        if (mpin.chars().distinct().count() == 1) {
+            return true;
+        }
+        return "1234567890".contains(mpin) || "0987654321".contains(mpin);
     }
 
     public Map<String, Object> refresh(ApiDtos.RefreshTokenRequest request) {

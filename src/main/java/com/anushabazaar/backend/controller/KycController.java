@@ -7,6 +7,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.Map;
 
 @RestController
@@ -28,8 +29,13 @@ public class KycController {
                          @RequestParam("aadhaarBackImage") MultipartFile aadhaarBackImage,
                          @RequestParam("selfiePhoto") MultipartFile selfiePhoto,
                          @RequestParam("bankPassbookOrStatement") MultipartFile bankPassbookOrStatement,
+                         @RequestParam(value = "panNumber", required = false) String panNumber,
+                         @RequestParam(value = "aadhaarLast4", required = false) String aadhaarLast4,
+                         @RequestParam(value = "dateOfBirth", required = false) LocalDate dateOfBirth,
+                         @RequestParam(value = "address", required = false) String address,
                          HttpServletRequest request) {
-        return platformService.submitKyc(currentUserService.requireCurrentUser(), panCardImage, aadhaarFrontImage, aadhaarBackImage, selfiePhoto, bankPassbookOrStatement, request);
+        return platformService.submitKyc(currentUserService.requireCurrentUser(), panCardImage, aadhaarFrontImage,
+                aadhaarBackImage, selfiePhoto, bankPassbookOrStatement, panNumber, aadhaarLast4, dateOfBirth, address, request);
     }
 
     @GetMapping("/status")

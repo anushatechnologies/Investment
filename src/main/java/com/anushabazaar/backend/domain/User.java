@@ -28,6 +28,20 @@ public class User {
     private String bankName;
     private String referralCode;
     private String referredByCode;
+    private String mpinHash;
+    private boolean termsAccepted;
+    private LocalDateTime termsAcceptedAt;
+    private boolean privacyPolicyAccepted;
+    private LocalDateTime privacyPolicyAcceptedAt;
+    private boolean kycConsentAccepted;
+    private LocalDateTime kycConsentAcceptedAt;
+    private boolean biometricEnabled;
+    private String biometricDeviceId;
+    private LocalDateTime biometricEnabledAt;
+    private boolean bankVerified;
+    private LocalDateTime bankVerifiedAt;
+    @Enumerated(EnumType.STRING)
+    private DomainEnums.OnboardingStatus onboardingStatus;
     @Enumerated(EnumType.STRING)
     private DomainEnums.KycStatus kycStatus;
     @Enumerated(EnumType.STRING)
@@ -75,6 +89,32 @@ public class User {
     public void setReferralCode(String referralCode) { this.referralCode = referralCode; }
     public String getReferredByCode() { return referredByCode; }
     public void setReferredByCode(String referredByCode) { this.referredByCode = referredByCode; }
+    public String getMpinHash() { return mpinHash; }
+    public void setMpinHash(String mpinHash) { this.mpinHash = mpinHash; }
+    public boolean isTermsAccepted() { return termsAccepted; }
+    public void setTermsAccepted(boolean termsAccepted) { this.termsAccepted = termsAccepted; }
+    public LocalDateTime getTermsAcceptedAt() { return termsAcceptedAt; }
+    public void setTermsAcceptedAt(LocalDateTime termsAcceptedAt) { this.termsAcceptedAt = termsAcceptedAt; }
+    public boolean isPrivacyPolicyAccepted() { return privacyPolicyAccepted; }
+    public void setPrivacyPolicyAccepted(boolean privacyPolicyAccepted) { this.privacyPolicyAccepted = privacyPolicyAccepted; }
+    public LocalDateTime getPrivacyPolicyAcceptedAt() { return privacyPolicyAcceptedAt; }
+    public void setPrivacyPolicyAcceptedAt(LocalDateTime privacyPolicyAcceptedAt) { this.privacyPolicyAcceptedAt = privacyPolicyAcceptedAt; }
+    public boolean isKycConsentAccepted() { return kycConsentAccepted; }
+    public void setKycConsentAccepted(boolean kycConsentAccepted) { this.kycConsentAccepted = kycConsentAccepted; }
+    public LocalDateTime getKycConsentAcceptedAt() { return kycConsentAcceptedAt; }
+    public void setKycConsentAcceptedAt(LocalDateTime kycConsentAcceptedAt) { this.kycConsentAcceptedAt = kycConsentAcceptedAt; }
+    public boolean isBiometricEnabled() { return biometricEnabled; }
+    public void setBiometricEnabled(boolean biometricEnabled) { this.biometricEnabled = biometricEnabled; }
+    public String getBiometricDeviceId() { return biometricDeviceId; }
+    public void setBiometricDeviceId(String biometricDeviceId) { this.biometricDeviceId = biometricDeviceId; }
+    public LocalDateTime getBiometricEnabledAt() { return biometricEnabledAt; }
+    public void setBiometricEnabledAt(LocalDateTime biometricEnabledAt) { this.biometricEnabledAt = biometricEnabledAt; }
+    public boolean isBankVerified() { return bankVerified; }
+    public void setBankVerified(boolean bankVerified) { this.bankVerified = bankVerified; }
+    public LocalDateTime getBankVerifiedAt() { return bankVerifiedAt; }
+    public void setBankVerifiedAt(LocalDateTime bankVerifiedAt) { this.bankVerifiedAt = bankVerifiedAt; }
+    public DomainEnums.OnboardingStatus getOnboardingStatus() { return onboardingStatus; }
+    public void setOnboardingStatus(DomainEnums.OnboardingStatus onboardingStatus) { this.onboardingStatus = onboardingStatus; }
     public DomainEnums.KycStatus getKycStatus() { return kycStatus; }
     public void setKycStatus(DomainEnums.KycStatus kycStatus) { this.kycStatus = kycStatus; }
     public DomainEnums.AccountStatus getAccountStatus() { return accountStatus; }

@@ -25,6 +25,15 @@ public final class DomainEnums {
         DEACTIVATED
     }
 
+    public enum OnboardingStatus {
+        OTP_VERIFIED,
+        REGISTERED,
+        MPIN_CREATED,
+        KYC_PENDING,
+        BANK_PENDING,
+        ACTIVE
+    }
+
     public enum InvestmentStatus {
         PENDING_RECEIPT,
         RECEIPT_UPLOADED,

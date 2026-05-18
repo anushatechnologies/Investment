@@ -19,7 +19,7 @@ public final class ApiDtos {
             @NotBlank String fullName,
             @NotBlank @Email String email,
             @Pattern(regexp = "\\d{10}") String mobileNumber,
-            @Size(min = 8) String password,
+            @Size(min = 8) @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).+$") String password,
             @NotNull LocalDate dateOfBirth,
             @NotBlank String panNumber,
             @Pattern(regexp = "\\d{4}") String aadhaarLast4,
@@ -42,13 +42,45 @@ public final class ApiDtos {
     public record ForgotPasswordRequest(@Email String email) {
     }
 
-    public record ResetPasswordRequest(@NotBlank String token, @Size(min = 8) String newPassword) {
+    public record ResetPasswordRequest(@NotBlank String token,
+                                       @Size(min = 8) @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).+$") String newPassword) {
     }
 
-    public record ChangePasswordRequest(@NotBlank String currentPassword, @Size(min = 8) String newPassword) {
+    public record ChangePasswordRequest(@NotBlank String currentPassword,
+                                        @Size(min = 8) @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).+$") String newPassword) {
+    }
+
+    public record SendOtpRequest(@Pattern(regexp = "\\d{10}") String mobileNumber, String countryCode) {
+    }
+
+    public record VerifyOtpRequest(@NotBlank String idToken) {
     }
 
     public record FirebaseMobileLoginRequest(@NotBlank String idToken) {
+    }
+
+    public record MobileOnboardingRegisterRequest(
+            @NotBlank String idToken,
+            @NotBlank String fullName,
+            @NotBlank @Email String email,
+            @NotBlank @Size(min = 8) @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).+$") String password,
+            String referredByCode,
+            boolean termsAccepted,
+            boolean privacyPolicyAccepted,
+            boolean kycConsentAccepted
+    ) {
+    }
+
+    public record SetMpinRequest(@Pattern(regexp = "\\d{4,6}") String mpin) {
+    }
+
+    public record EnableBiometricRequest(@NotBlank String deviceId, boolean enabled) {
+    }
+
+    public record VerifyBankRequest(@NotBlank String accountHolderName,
+                                    @NotBlank String bankAccountNumber,
+                                    @NotBlank String bankIfscCode,
+                                    @NotBlank String bankName) {
     }
 
     public record FirebaseMobileRegisterRequest(
