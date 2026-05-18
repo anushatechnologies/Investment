@@ -1,0 +1,182 @@
+name: AWS CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+  ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+  ECS_TASK_FAMILY: ${{ vars.ECS_TASK_FAMILY }}
+  ECS_CONTAINER_NAME: ${{ vars.ECS_CONTAINER_NAME }}
+  ECS_EXECUTION_ROLE_ARN: ${{ vars.ECS_EXECUTION_ROLE_ARN }}
+  ECS_TASK_ROLE_ARN: ${{ vars.ECS_TASK_ROLE_ARN }}
+  SPRING_DATASOURCE_URL: ${{ vars.SPRING_DATASOURCE_URL }}
+  SPRING_DATASOURCE_USERNAME: ${{ vars.SPRING_DATASOURCE_USERNAME }}
+  SPRING_DATASOURCE_PASSWORD_SECRET_ARN: ${{ secrets.SPRING_DATASOURCE_PASSWORD_SECRET_ARN }}
+  APP_JWT_SECRET_ARN: ${{ secrets.APP_JWT_SECRET_ARN }}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  test:
+    name: Build And Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Run tests
+        run: mvn -B test
+
+      - name: Package jar
+        run: mvn -B -DskipTests package
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: target/backend-0.0.1-SNAPSHOT.jar
+
+  deploy:
+    name: Push To ECR And Deploy ECS
+    runs-on: ubuntu-latest
+    needs: test
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar
+          path: target
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker image
+        id: image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
+          docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create ECS task definition
+        env:
+          IMAGE_URI: ${{ steps.image.outputs.image }}
+        run: |
+          cat > task-definition.json <<EOF
+          {
+            "family": "$ECS_TASK_FAMILY",
+            "networkMode": "awsvpc",
+            "requiresCompatibilities": ["FARGATE"],
+            "cpu": "512",
+            "memory": "1024",
+            "executionRoleArn": "$ECS_EXECUTION_ROLE_ARN",
+            "taskRoleArn": "$ECS_TASK_ROLE_ARN",
+            "containerDefinitions": [
+              {
+                "name": "$ECS_CONTAINER_NAME",
+                "image": "$IMAGE_URI",
+                "essential": true,
+                "portMappings": [
+                  {
+                    "containerPort": 8080,
+                    "hostPort": 8080,
+                    "protocol": "tcp"
+                  }
+                ],
+                "environment": [
+                  {
+                    "name": "SPRING_DATASOURCE_URL",
+                    "value": "$SPRING_DATASOURCE_URL"
+                  },
+                  {
+                    "name": "SPRING_DATASOURCE_USERNAME",
+                    "value": "$SPRING_DATASOURCE_USERNAME"
+                  },
+                  {
+                    "name": "APP_FILE_STORAGE_ROOT",
+                    "value": "/app/uploads"
+                  }
+                ],
+                "secrets": [
+                  {
+                    "name": "SPRING_DATASOURCE_PASSWORD",
+                    "valueFrom": "$SPRING_DATASOURCE_PASSWORD_SECRET_ARN"
+                  },
+                  {
+                    "name": "APP_JWT_SECRET",
+                    "valueFrom": "$APP_JWT_SECRET_ARN"
+                  }
+                ],
+                "logConfiguration": {
+                  "logDriver": "awslogs",
+                  "options": {
+                    "awslogs-group": "/ecs/$ECS_TASK_FAMILY",
+                    "awslogs-region": "$AWS_REGION",
+                    "awslogs-stream-prefix": "ecs"
+                  }
+                },
+                "healthCheck": {
+                  "command": [
+                    "CMD-SHELL",
+                    "curl -f http://localhost:8080/actuator/health || exit 1"
+                  ],
+                  "interval": 30,
+                  "timeout": 5,
+                  "retries": 3,
+                  "startPeriod": 60
+                }
+              }
+            ]
+          }
+          EOF
+
+      - name: Register ECS task definition
+        id: task-def
+        run: |
+          TASK_DEFINITION_ARN="$(aws ecs register-task-definition \
+            --cli-input-json file://task-definition.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)"
+          echo "task_definition_arn=$TASK_DEFINITION_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy ECS service
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --task-definition "${{ steps.task-def.outputs.task_definition_arn }}" \
+            --force-new-deployment
+
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE"

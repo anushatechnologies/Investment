@@ -4,9 +4,9 @@ spring:
   main:
     banner-mode: off
   datasource:
-    url: jdbc:mysql://localhost:3306/anushabazaar?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
-    username: root
-    password: 2395   
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/anushabazaar?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:2395}
   jpa:
     hibernate:
       ddl-auto: update
@@ -52,8 +52,8 @@ logging:
 
 app:
   jwt:
-    secret: 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
-    access-expiry-hours: 24
-    refresh-expiry-days: 7
+    secret: ${APP_JWT_SECRET:0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF}
+    access-expiry-hours: ${APP_JWT_ACCESS_EXPIRY_HOURS:24}
+    refresh-expiry-days: ${APP_JWT_REFRESH_EXPIRY_DAYS:7}
   file-storage:
-    root: uploads
+    root: ${APP_FILE_STORAGE_ROOT:uploads}
