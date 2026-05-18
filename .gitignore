@@ -1,0 +1,7 @@
+/target/
+/uploads/
+/tmp-test/
+/.idea/
+/.vscode/
+*.iml
+*.log
