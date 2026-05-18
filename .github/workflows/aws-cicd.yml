@@ -7,11 +7,11 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: ${{ vars.AWS_REGION }}
-  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-2' }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'anushabazaar-backend' }}
   EC2_HOST: ${{ vars.EC2_HOST }}
-  EC2_USER: ${{ vars.EC2_USER }}
-  APP_PORT: ${{ vars.APP_PORT }}
+  EC2_USER: ${{ vars.EC2_USER || 'ec2-user' }}
+  APP_PORT: ${{ vars.APP_PORT || '8080' }}
   SPRING_DATASOURCE_URL: ${{ vars.SPRING_DATASOURCE_URL }}
   SPRING_DATASOURCE_USERNAME: ${{ vars.SPRING_DATASOURCE_USERNAME }}
 
