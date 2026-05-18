@@ -1,125 +1,123 @@
-# AWS CI/CD, ECR, ECS, and RDS Setup
+# AWS CI/CD With ECR, EC2 Docker, and RDS
 
-This project deploys as a Dockerized Spring Boot app:
+This project deploys like this:
 
-- GitHub Actions builds and tests the app.
-- Docker image is pushed to Amazon ECR.
-- Amazon ECS Fargate runs the container.
-- Amazon RDS MySQL stores application data.
-- GitHub Actions uses AWS OIDC, so no long-lived AWS keys are stored in GitHub.
+- GitHub Actions runs tests.
+- GitHub Actions builds the Spring Boot jar.
+- GitHub Actions builds a Docker image.
+- GitHub Actions pushes the image to Amazon ECR.
+- GitHub Actions SSHs into EC2.
+- EC2 pulls the latest ECR image and runs it with Docker.
+- Runtime secrets are injected from GitHub Actions secrets into an `.env` file on EC2.
+- RDS MySQL is used as the production database.
+
+No ECS is required.
 
 ## 1. Create RDS MySQL
 
-1. Open AWS Console -> RDS -> Create database.
-2. Engine: MySQL.
-3. Template: Free tier for testing, Production for real use.
-4. DB identifier: `anushabazaar-db`.
-5. Master username: `admin`.
-6. Master password: create a strong password.
-7. Database name: `anushabazaar`.
-8. Public access: `No` for production.
-9. Security group: allow inbound MySQL `3306` only from the ECS service security group.
+Use the same AWS region you selected in the console:
 
-Final JDBC URL format:
+```text
+ap-south-2
+Asia Pacific (Hyderabad)
+```
+
+Recommended cheap setup:
+
+```text
+Engine: MySQL
+Template: Dev/Test or Sandbox
+Deployment: Single-AZ DB instance
+Instance: db.t3.micro or db.t4g.micro
+Storage: General Purpose SSD gp3
+Allocated storage: 20 GiB
+DB identifier: investment-db
+Master username: admin
+Initial database name: anushabazaar
+```
+
+Do not choose Multi-AZ cluster, `db.m6gd.large`, `io2`, 400 GiB, or 3000 IOPS unless you intentionally want a large monthly bill.
+
+Final JDBC URL:
 
 ```text
 jdbc:mysql://<rds-endpoint>:3306/anushabazaar?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
 ```
 
-## 2. Store Secrets In AWS Secrets Manager
+## 2. Create ECR Repository
 
-Create two plaintext secrets:
-
-```text
-anushabazaar/prod/db-password
-anushabazaar/prod/jwt-secret
-```
-
-The JWT secret should be at least 64 characters.
-
-Copy both secret ARNs. They will be used in GitHub repository secrets.
-
-## 3. Create ECR Repository
-
-Open AWS Console -> ECR -> Create repository:
+AWS Console -> ECR -> Create repository:
 
 ```text
 anushabazaar-backend
 ```
 
-## 4. Create CloudWatch Log Group
+## 3. Create EC2 Instance
 
-Create a log group:
-
-```text
-/ecs/anushabazaar-backend
-```
-
-## 5. Create ECS Cluster And Service
-
-1. Open ECS -> Clusters -> Create cluster.
-2. Cluster name: `anushabazaar-cluster`.
-3. Infrastructure: AWS Fargate.
-4. Create an Application Load Balancer with listener `HTTP:80`.
-5. Target group health check path:
+Recommended for testing:
 
 ```text
-/actuator/health
+AMI: Amazon Linux 2023
+Instance type: t3.micro
+Key pair: create/download a .pem key
+Security group inbound:
+  SSH 22 from your IP
+  HTTP 80 from 0.0.0.0/0
+  Custom TCP 8080 from 0.0.0.0/0 if you expose app directly
 ```
 
-6. Container port: `8080`.
-7. Service name: `anushabazaar-backend-service`.
+For production, use a load balancer and keep app port private.
 
-The first service creation may need a temporary task definition. After GitHub Actions runs once, it will register the real task definition.
+## 4. Install Docker And AWS CLI On EC2
 
-## 6. Create IAM Roles
+SSH into EC2:
 
-### ECS Task Execution Role
+```bash
+ssh -i your-key.pem ec2-user@<ec2-public-ip>
+```
 
-Create or use:
+Run:
+
+```bash
+sudo dnf update -y
+sudo dnf install -y docker awscli
+sudo systemctl enable docker
+sudo systemctl start docker
+sudo usermod -aG docker ec2-user
+exit
+```
+
+SSH again so the Docker group permission is active:
+
+```bash
+ssh -i your-key.pem ec2-user@<ec2-public-ip>
+docker ps
+aws --version
+```
+
+## 5. Give EC2 Permission To Pull From ECR
+
+Create an IAM role for EC2:
 
 ```text
-ecsTaskExecutionRole
+anushabazaar-ec2-ecr-role
 ```
 
-Attach:
+Attach policy:
 
 ```text
-AmazonECSTaskExecutionRolePolicy
+AmazonEC2ContainerRegistryReadOnly
 ```
 
-Add permissions to read Secrets Manager secrets:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "secretsmanager:GetSecretValue"
-      ],
-      "Resource": [
-        "arn:aws:secretsmanager:<region>:<account-id>:secret:anushabazaar/prod/*"
-      ]
-    }
-  ]
-}
-```
-
-### ECS Task Role
-
-Create:
+Attach this role to the EC2 instance:
 
 ```text
-anushabazaar-backend-task-role
+EC2 -> Instance -> Actions -> Security -> Modify IAM role
 ```
 
-For now it can have no extra permissions.
+## 6. Create GitHub OIDC Role For Pushing To ECR
 
-## 7. Create GitHub OIDC Role In AWS
-
-Create an IAM Identity Provider:
+Create IAM Identity Provider:
 
 ```text
 Provider URL: https://token.actions.githubusercontent.com
@@ -129,7 +127,7 @@ Audience: sts.amazonaws.com
 Create IAM role:
 
 ```text
-github-actions-anushabazaar-deploy
+github-actions-anushabazaar-ecr-deploy
 ```
 
 Trust policy:
@@ -141,7 +139,7 @@ Trust policy:
     {
       "Effect": "Allow",
       "Principal": {
-        "Federated": "arn:aws:iam::<account-id>:oidc-provider/token.actions.githubusercontent.com"
+        "Federated": "arn:aws:iam::406223548776:oidc-provider/token.actions.githubusercontent.com"
       },
       "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {
@@ -157,7 +155,7 @@ Trust policy:
 }
 ```
 
-Attach this deploy policy, replacing account and region values:
+Attach policy for ECR push:
 
 ```json
 {
@@ -165,9 +163,7 @@ Attach this deploy policy, replacing account and region values:
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": [
-        "ecr:GetAuthorizationToken"
-      ],
+      "Action": "ecr:GetAuthorizationToken",
       "Resource": "*"
     },
     {
@@ -175,100 +171,118 @@ Attach this deploy policy, replacing account and region values:
       "Action": [
         "ecr:BatchCheckLayerAvailability",
         "ecr:CompleteLayerUpload",
-        "ecr:CreateRepository",
         "ecr:DescribeRepositories",
         "ecr:InitiateLayerUpload",
         "ecr:PutImage",
         "ecr:UploadLayerPart"
       ],
-      "Resource": "arn:aws:ecr:<region>:<account-id>:repository/anushabazaar-backend"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ecs:DescribeServices",
-        "ecs:DescribeTaskDefinition",
-        "ecs:RegisterTaskDefinition",
-        "ecs:UpdateService"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "iam:PassRole"
-      ],
-      "Resource": [
-        "arn:aws:iam::<account-id>:role/ecsTaskExecutionRole",
-        "arn:aws:iam::<account-id>:role/anushabazaar-backend-task-role"
-      ]
+      "Resource": "arn:aws:ecr:ap-south-2:406223548776:repository/anushabazaar-backend"
     }
   ]
 }
 ```
 
-## 8. Add GitHub Repository Variables
+Copy the role ARN.
+
+## 7. Add GitHub Repository Variables
 
 GitHub repo -> Settings -> Secrets and variables -> Actions -> Variables:
 
 ```text
-AWS_REGION=ap-south-1
+AWS_REGION=ap-south-2
 ECR_REPOSITORY=anushabazaar-backend
-ECS_CLUSTER=anushabazaar-cluster
-ECS_SERVICE=anushabazaar-backend-service
-ECS_TASK_FAMILY=anushabazaar-backend
-ECS_CONTAINER_NAME=anushabazaar-backend
-ECS_EXECUTION_ROLE_ARN=arn:aws:iam::<account-id>:role/ecsTaskExecutionRole
-ECS_TASK_ROLE_ARN=arn:aws:iam::<account-id>:role/anushabazaar-backend-task-role
+EC2_HOST=<ec2-public-ip-or-dns>
+EC2_USER=ec2-user
+APP_PORT=8080
 SPRING_DATASOURCE_URL=jdbc:mysql://<rds-endpoint>:3306/anushabazaar?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
 SPRING_DATASOURCE_USERNAME=admin
 ```
 
-## 9. Add GitHub Repository Secrets
+## 8. Add GitHub Repository Secrets
 
 GitHub repo -> Settings -> Secrets and variables -> Actions -> Secrets:
 
 ```text
-AWS_GITHUB_ACTIONS_ROLE_ARN=arn:aws:iam::<account-id>:role/github-actions-anushabazaar-deploy
-SPRING_DATASOURCE_PASSWORD_SECRET_ARN=arn:aws:secretsmanager:<region>:<account-id>:secret:anushabazaar/prod/db-password-xxxx
-APP_JWT_SECRET_ARN=arn:aws:secretsmanager:<region>:<account-id>:secret:anushabazaar/prod/jwt-secret-xxxx
+AWS_GITHUB_ACTIONS_ROLE_ARN=arn:aws:iam::406223548776:role/github-actions-anushabazaar-ecr-deploy
+EC2_SSH_PRIVATE_KEY=<full private key content from your EC2 .pem file>
+SPRING_DATASOURCE_PASSWORD=<your RDS master password>
+APP_JWT_SECRET=<64+ character JWT secret>
+```
+
+Important: `EC2_SSH_PRIVATE_KEY` must include the full key:
+
+```text
+-----BEGIN RSA PRIVATE KEY-----
+...
+-----END RSA PRIVATE KEY-----
+```
+
+or:
+
+```text
+-----BEGIN OPENSSH PRIVATE KEY-----
+...
+-----END OPENSSH PRIVATE KEY-----
+```
+
+## 9. RDS Security Group
+
+If EC2 connects to RDS privately:
+
+```text
+RDS security group inbound:
+Type: MySQL/Aurora
+Port: 3306
+Source: EC2 security group
+```
+
+If testing from your laptop:
+
+```text
+Source: your IP only
+```
+
+Never leave MySQL open to:
+
+```text
+0.0.0.0/0
 ```
 
 ## 10. Deploy
 
-Push to `main`:
+After all variables/secrets are added:
 
-```powershell
-git add .
-git commit -m "Add AWS CI/CD pipeline"
-git push
+```bash
+git push origin main
 ```
 
-Then open:
+Or run manually:
 
 ```text
-GitHub -> Investment -> Actions -> AWS CI/CD
+GitHub -> Investment -> Actions -> AWS EC2 CI/CD -> Run workflow
 ```
 
 The workflow will:
 
-1. Run tests.
-2. Package the Spring Boot jar.
+1. Test the backend.
+2. Package the jar.
 3. Build Docker image.
 4. Push image to ECR.
-5. Register a new ECS task definition.
-6. Update the ECS service.
+5. SSH into EC2.
+6. Write backend secrets into `~/investment-backend/.env`.
+7. Pull the new image from ECR.
+8. Restart the Docker container.
 
 ## 11. Verify
 
-Use the load balancer DNS:
+Open:
 
 ```text
-http://<load-balancer-dns>/actuator/health
-http://<load-balancer-dns>/swagger-ui.html
+http://<ec2-public-ip>:8080/actuator/health
+http://<ec2-public-ip>:8080/swagger-ui.html
 ```
 
-Expected health response:
+Expected:
 
 ```json
 {"status":"UP"}
@@ -276,6 +290,6 @@ Expected health response:
 
 ## Notes
 
-- Do not commit production database passwords.
-- The local defaults in `application.yml` are only for development.
-- For production file uploads, local container storage is temporary. Use S3 later if uploaded KYC/receipt files must persist across deployments.
+- Local container uploads are stored in Docker volume `investment_uploads`.
+- For production KYC/receipt files, S3 is better than local EC2 Docker volume.
+- If port `8080` is not open, either open it in the EC2 security group or map `APP_PORT=80`.
