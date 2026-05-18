@@ -38,6 +38,8 @@ public class SecurityConfig {
                                 "/api/auth/register",
                                 "/api/auth/verify-email",
                                 "/api/auth/login",
+                                "/api/auth/firebase-mobile/login",
+                                "/api/auth/firebase-mobile/register",
                                 "/api/auth/refresh-token",
                                 "/api/auth/forgot-password",
                                 "/api/auth/reset-password",

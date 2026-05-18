@@ -36,6 +36,18 @@ public class AuthController {
         return authService.login(request, servletRequest);
     }
 
+    @PostMapping("/firebase-mobile/login")
+    public Map<String, Object> firebaseMobileLogin(@Valid @RequestBody ApiDtos.FirebaseMobileLoginRequest request,
+                                                   HttpServletRequest servletRequest) {
+        return authService.firebaseMobileLogin(request, servletRequest);
+    }
+
+    @PostMapping("/firebase-mobile/register")
+    public Map<String, Object> firebaseMobileRegister(@Valid @RequestBody ApiDtos.FirebaseMobileRegisterRequest request,
+                                                      HttpServletRequest servletRequest) {
+        return authService.firebaseMobileRegister(request, servletRequest);
+    }
+
     @PostMapping("/refresh-token")
     public Map<String, Object> refresh(@Valid @RequestBody ApiDtos.RefreshTokenRequest request) {
         return authService.refresh(request);

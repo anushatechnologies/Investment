@@ -57,3 +57,9 @@ app:
     refresh-expiry-days: ${APP_JWT_REFRESH_EXPIRY_DAYS:7}
   file-storage:
     root: ${APP_FILE_STORAGE_ROOT:uploads}
+  firebase:
+    project-id: ${APP_FIREBASE_PROJECT_ID:anushabazaar-2288e}
+    service-account-resource: ${APP_FIREBASE_SERVICE_ACCOUNT_RESOURCE:anushabazaar-2288e-firebase-adminsdk-fbsvc-e520eea937.json}
+    service-account-path: ${APP_FIREBASE_SERVICE_ACCOUNT_PATH:}
+    service-account-json: ${APP_FIREBASE_SERVICE_ACCOUNT_JSON:}
+    service-account-base64: ${APP_FIREBASE_SERVICE_ACCOUNT_BASE64:}

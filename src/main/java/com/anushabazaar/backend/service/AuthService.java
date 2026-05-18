@@ -38,6 +38,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuditService auditService;
+    private final FirebasePhoneAuthService firebasePhoneAuthService;
     private final int refreshExpiryDays;
 
     public AuthService(UserRepository userRepository,
@@ -47,6 +48,7 @@ public class AuthService {
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService,
                        AuditService auditService,
+                       FirebasePhoneAuthService firebasePhoneAuthService,
                        @Value("${app.jwt.refresh-expiry-days}") int refreshExpiryDays) {
         this.userRepository = userRepository;
         this.walletRepository = walletRepository;
@@ -55,6 +57,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.auditService = auditService;
+        this.firebasePhoneAuthService = firebasePhoneAuthService;
         this.refreshExpiryDays = refreshExpiryDays;
     }
 
@@ -183,6 +186,120 @@ public class AuthService {
                 "role", user.getRole(),
                 "userId", user.getId()
         );
+    }
+
+    @Transactional
+    public Map<String, Object> firebaseMobileLogin(ApiDtos.FirebaseMobileLoginRequest request, HttpServletRequest servletRequest) {
+        FirebasePhoneAuthService.VerifiedFirebasePhone verifiedPhone = firebasePhoneAuthService.verifyPhoneToken(request.idToken());
+        return userRepository.findByMobileNumber(verifiedPhone.mobileNumber())
+                .map(user -> {
+                    ensureMobileLoginAllowed(user);
+                    user.setLastLoginAt(LocalDateTime.now());
+                    user.setLastLoginIp(servletRequest.getRemoteAddr());
+                    user.setUpdatedAt(LocalDateTime.now());
+                    userRepository.save(user);
+                    auditService.log(user, "FIREBASE_MOBILE_LOGIN", "User", user.getId(), null, verifiedPhone.mobileNumber(), servletRequest);
+                    Map<String, Object> response = authResponse(user);
+                    response.put("userExists", true);
+                    response.put("nextStep", user.getKycStatus() == DomainEnums.KycStatus.APPROVED ? "OPEN_DASHBOARD" : "COMPLETE_KYC");
+                    return response;
+                })
+                .orElseGet(() -> {
+                    Map<String, Object> response = new HashMap<>();
+                    response.put("userExists", false);
+                    response.put("nextStep", "REGISTER");
+                    response.put("mobileNumber", verifiedPhone.mobileNumber());
+                    response.put("firebaseUid", verifiedPhone.firebaseUid());
+                    response.put("message", "Mobile verified. Complete registration to create investor account.");
+                    return response;
+                });
+    }
+
+    @Transactional
+    public Map<String, Object> firebaseMobileRegister(ApiDtos.FirebaseMobileRegisterRequest request, HttpServletRequest servletRequest) {
+        FirebasePhoneAuthService.VerifiedFirebasePhone verifiedPhone = firebasePhoneAuthService.verifyPhoneToken(request.idToken());
+        if (userRepository.findByMobileNumber(verifiedPhone.mobileNumber()).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mobile number already exists");
+        }
+        if (userRepository.findByEmail(request.email().toLowerCase()).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
+        }
+        if (!request.riskDisclosureAccepted() || !request.investorAgreementAccepted()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mandatory consents must be accepted");
+        }
+        if (request.dateOfBirth().isAfter(LocalDate.now().minusYears(18))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investor must be at least 18 years old");
+        }
+
+        User user = new User();
+        user.setId(UUID.randomUUID().toString());
+        user.setFullName(request.fullName());
+        user.setEmail(request.email().toLowerCase());
+        user.setMobileNumber(verifiedPhone.mobileNumber());
+        user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
+        user.setDateOfBirth(request.dateOfBirth());
+        user.setPanNumber(request.panNumber());
+        user.setAadhaarLast4(request.aadhaarLast4());
+        user.setAddress(request.address());
+        user.setBankAccountNumber(request.bankAccountNumber());
+        user.setBankIfscCode(request.bankIfscCode());
+        user.setBankName(request.bankName());
+        user.setReferralCode(UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase());
+        user.setReferredByCode(request.referredByCode());
+        user.setKycStatus(DomainEnums.KycStatus.NOT_SUBMITTED);
+        user.setAccountStatus(DomainEnums.AccountStatus.ACTIVE);
+        user.setRole(DomainEnums.Role.INVESTOR);
+        user.setRiskDisclosureAccepted(true);
+        user.setRiskDisclosureDate(LocalDateTime.now());
+        user.setInvestorAgreementAccepted(true);
+        user.setInvestorAgreementDate(LocalDateTime.now());
+        user.setEmailVerified(true);
+        user.setFailedLoginAttempts(0);
+        user.setLastLoginAt(LocalDateTime.now());
+        user.setLastLoginIp(servletRequest.getRemoteAddr());
+        user.setCreatedAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now());
+        user.setCreatedBy("FIREBASE_PHONE");
+        userRepository.save(user);
+
+        Wallet wallet = new Wallet();
+        wallet.setId(UUID.randomUUID().toString());
+        wallet.setUserId(user.getId());
+        wallet.setAvailableBalance(BigDecimal.ZERO);
+        wallet.setLockedBalance(BigDecimal.ZERO);
+        wallet.setTotalCredited(BigDecimal.ZERO);
+        wallet.setTotalDebited(BigDecimal.ZERO);
+        wallet.setVersionValue(0L);
+        wallet.setLastUpdatedAt(LocalDateTime.now());
+        walletRepository.save(wallet);
+
+        createReferralLinks(user);
+        auditService.log(user, "FIREBASE_MOBILE_REGISTERED", "User", user.getId(), null, verifiedPhone.mobileNumber(), servletRequest);
+
+        Map<String, Object> response = authResponse(user);
+        response.put("userExists", true);
+        response.put("nextStep", "COMPLETE_KYC");
+        response.put("message", "Registration successful. Complete KYC to start investing.");
+        return response;
+    }
+
+    private void ensureMobileLoginAllowed(User user) {
+        if (user.getAccountStatus() == DomainEnums.AccountStatus.SUSPENDED || user.getAccountStatus() == DomainEnums.AccountStatus.DEACTIVATED) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account is not active");
+        }
+    }
+
+    private Map<String, Object> authResponse(User user) {
+        String accessToken = jwtService.generateAccessToken(user.getEmail(), user.getId(), user.getRole().name());
+        TokenRecord refreshToken = issueToken(user.getId(), DomainEnums.TokenType.REFRESH, refreshExpiryDays * 24);
+        Map<String, Object> response = new HashMap<>();
+        response.put("accessToken", accessToken);
+        response.put("refreshToken", refreshToken.getTokenValue());
+        response.put("role", user.getRole());
+        response.put("userId", user.getId());
+        response.put("kycStatus", user.getKycStatus());
+        response.put("accountStatus", user.getAccountStatus());
+        return response;
     }
 
     public Map<String, Object> refresh(ApiDtos.RefreshTokenRequest request) {

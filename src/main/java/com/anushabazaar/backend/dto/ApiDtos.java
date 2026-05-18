@@ -17,7 +17,7 @@ public final class ApiDtos {
 
     public record RegisterRequest(
             @NotBlank String fullName,
-            @Email String email,
+            @NotBlank @Email String email,
             @Pattern(regexp = "\\d{10}") String mobileNumber,
             @Size(min = 8) String password,
             @NotNull LocalDate dateOfBirth,
@@ -46,6 +46,26 @@ public final class ApiDtos {
     }
 
     public record ChangePasswordRequest(@NotBlank String currentPassword, @Size(min = 8) String newPassword) {
+    }
+
+    public record FirebaseMobileLoginRequest(@NotBlank String idToken) {
+    }
+
+    public record FirebaseMobileRegisterRequest(
+            @NotBlank String idToken,
+            @NotBlank String fullName,
+            @NotBlank @Email String email,
+            @NotNull LocalDate dateOfBirth,
+            @NotBlank String panNumber,
+            @Pattern(regexp = "\\d{4}") String aadhaarLast4,
+            @NotBlank String address,
+            @NotBlank String bankAccountNumber,
+            @NotBlank String bankIfscCode,
+            @NotBlank String bankName,
+            String referredByCode,
+            boolean riskDisclosureAccepted,
+            boolean investorAgreementAccepted
+    ) {
     }
 
     public record KycDecisionRequest(String reason, String adminNotes) {
