@@ -38,6 +38,30 @@ public class KycController {
                 aadhaarBackImage, selfiePhoto, bankPassbookOrStatement, panNumber, aadhaarLast4, dateOfBirth, address, request);
     }
 
+    @PostMapping("/pan-verify")
+    public Object panVerify(@RequestParam("panCardImage") MultipartFile panCardImage,
+                            @RequestParam("panNumber") String panNumber,
+                            HttpServletRequest request) {
+        return platformService.submitPan(currentUserService.requireCurrentUser(), panCardImage, panNumber, request);
+    }
+
+    @PostMapping("/aadhaar-verify")
+    public Object aadhaarVerify(@RequestParam("aadhaarFrontImage") MultipartFile aadhaarFrontImage,
+                                @RequestParam("aadhaarBackImage") MultipartFile aadhaarBackImage,
+                                @RequestParam(value = "aadhaarNumber", required = false) String aadhaarNumber,
+                                @RequestParam(value = "aadhaarLast4", required = false) String aadhaarLast4,
+                                @RequestParam(value = "address", required = false) String address,
+                                HttpServletRequest request) {
+        return platformService.submitAadhaar(currentUserService.requireCurrentUser(), aadhaarFrontImage, aadhaarBackImage,
+                aadhaarNumber, aadhaarLast4, address, request);
+    }
+
+    @PostMapping("/upload-selfie")
+    public Object uploadSelfie(@RequestParam("selfiePhoto") MultipartFile selfiePhoto,
+                               HttpServletRequest request) {
+        return platformService.uploadSelfie(currentUserService.requireCurrentUser(), selfiePhoto, request);
+    }
+
     @GetMapping("/status")
     public Map<String, Object> status() {
         return platformService.getOwnKycStatus(currentUserService.requireCurrentUser());

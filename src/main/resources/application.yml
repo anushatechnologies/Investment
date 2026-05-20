@@ -18,6 +18,17 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 25MB
+  mail:
+    host: ${SPRING_MAIL_HOST:smtpout.secureserver.net}
+    port: ${SPRING_MAIL_PORT:587}
+    username: ${SPRING_MAIL_USERNAME:}
+    password: ${SPRING_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
 server:
   port: 8080
@@ -28,6 +39,9 @@ server:
     include-exception: false
 
 management:
+  health:
+    mail:
+      enabled: ${MANAGEMENT_HEALTH_MAIL_ENABLED:false}
   endpoints:
     web:
       exposure:
@@ -51,12 +65,24 @@ logging:
     com.anushabazaar.backend: INFO
 
 app:
+  frontend:
+    base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}
+  email:
+    enabled: ${APP_EMAIL_ENABLED:false}
+    from: ${APP_EMAIL_FROM:${SPRING_MAIL_USERNAME:}}
+    expose-generated-values: ${APP_EMAIL_EXPOSE_GENERATED_VALUES:true}
   jwt:
     secret: ${APP_JWT_SECRET:0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF}
     access-expiry-hours: ${APP_JWT_ACCESS_EXPIRY_HOURS:24}
     refresh-expiry-days: ${APP_JWT_REFRESH_EXPIRY_DAYS:7}
   file-storage:
+    provider: ${APP_FILE_STORAGE_PROVIDER:local}
     root: ${APP_FILE_STORAGE_ROOT:uploads}
+    s3:
+      bucket: ${APP_FILE_STORAGE_S3_BUCKET:}
+      region: ${APP_FILE_STORAGE_S3_REGION:ap-south-1}
+      prefix: ${APP_FILE_STORAGE_S3_PREFIX:anushabazaar}
+      public-base-url: ${APP_FILE_STORAGE_S3_PUBLIC_BASE_URL:}
   firebase:
     project-id: ${APP_FIREBASE_PROJECT_ID:anushabazaar-2288e}
     service-account-resource: ${APP_FIREBASE_SERVICE_ACCOUNT_RESOURCE:anushabazaar-2288e-firebase-adminsdk-fbsvc-e520eea937.json}

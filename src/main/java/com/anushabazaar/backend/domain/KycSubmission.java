@@ -19,6 +19,21 @@ public class KycSubmission {
     private String selfiePath;
     private String bankProofPath;
     @Enumerated(EnumType.STRING)
+    private DomainEnums.DocumentReviewStatus panCardStatus;
+    @Enumerated(EnumType.STRING)
+    private DomainEnums.DocumentReviewStatus aadhaarFrontStatus;
+    @Enumerated(EnumType.STRING)
+    private DomainEnums.DocumentReviewStatus aadhaarBackStatus;
+    @Enumerated(EnumType.STRING)
+    private DomainEnums.DocumentReviewStatus selfieStatus;
+    @Enumerated(EnumType.STRING)
+    private DomainEnums.DocumentReviewStatus bankProofStatus;
+    private String panCardRejectionReason;
+    private String aadhaarFrontRejectionReason;
+    private String aadhaarBackRejectionReason;
+    private String selfieRejectionReason;
+    private String bankProofRejectionReason;
+    @Enumerated(EnumType.STRING)
     private DomainEnums.KycStatus status;
     private LocalDateTime submittedAt;
     private String reviewedByAdminId;
@@ -40,6 +55,26 @@ public class KycSubmission {
     public void setSelfiePath(String selfiePath) { this.selfiePath = selfiePath; }
     public String getBankProofPath() { return bankProofPath; }
     public void setBankProofPath(String bankProofPath) { this.bankProofPath = bankProofPath; }
+    public DomainEnums.DocumentReviewStatus getPanCardStatus() { return panCardStatus; }
+    public void setPanCardStatus(DomainEnums.DocumentReviewStatus panCardStatus) { this.panCardStatus = panCardStatus; }
+    public DomainEnums.DocumentReviewStatus getAadhaarFrontStatus() { return aadhaarFrontStatus; }
+    public void setAadhaarFrontStatus(DomainEnums.DocumentReviewStatus aadhaarFrontStatus) { this.aadhaarFrontStatus = aadhaarFrontStatus; }
+    public DomainEnums.DocumentReviewStatus getAadhaarBackStatus() { return aadhaarBackStatus; }
+    public void setAadhaarBackStatus(DomainEnums.DocumentReviewStatus aadhaarBackStatus) { this.aadhaarBackStatus = aadhaarBackStatus; }
+    public DomainEnums.DocumentReviewStatus getSelfieStatus() { return selfieStatus; }
+    public void setSelfieStatus(DomainEnums.DocumentReviewStatus selfieStatus) { this.selfieStatus = selfieStatus; }
+    public DomainEnums.DocumentReviewStatus getBankProofStatus() { return bankProofStatus; }
+    public void setBankProofStatus(DomainEnums.DocumentReviewStatus bankProofStatus) { this.bankProofStatus = bankProofStatus; }
+    public String getPanCardRejectionReason() { return panCardRejectionReason; }
+    public void setPanCardRejectionReason(String panCardRejectionReason) { this.panCardRejectionReason = panCardRejectionReason; }
+    public String getAadhaarFrontRejectionReason() { return aadhaarFrontRejectionReason; }
+    public void setAadhaarFrontRejectionReason(String aadhaarFrontRejectionReason) { this.aadhaarFrontRejectionReason = aadhaarFrontRejectionReason; }
+    public String getAadhaarBackRejectionReason() { return aadhaarBackRejectionReason; }
+    public void setAadhaarBackRejectionReason(String aadhaarBackRejectionReason) { this.aadhaarBackRejectionReason = aadhaarBackRejectionReason; }
+    public String getSelfieRejectionReason() { return selfieRejectionReason; }
+    public void setSelfieRejectionReason(String selfieRejectionReason) { this.selfieRejectionReason = selfieRejectionReason; }
+    public String getBankProofRejectionReason() { return bankProofRejectionReason; }
+    public void setBankProofRejectionReason(String bankProofRejectionReason) { this.bankProofRejectionReason = bankProofRejectionReason; }
     public DomainEnums.KycStatus getStatus() { return status; }
     public void setStatus(DomainEnums.KycStatus status) { this.status = status; }
     public LocalDateTime getSubmittedAt() { return submittedAt; }

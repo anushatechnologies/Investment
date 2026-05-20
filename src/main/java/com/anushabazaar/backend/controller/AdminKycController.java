@@ -36,6 +36,13 @@ public class AdminKycController {
         return platformService.rejectKyc(currentUserService.requireCurrentUser(), id, request, servletRequest);
     }
 
+    @PostMapping("/{id}/documents/reject")
+    public Object rejectDocuments(@PathVariable("id") String id,
+                                  @RequestBody ApiDtos.KycDocumentRejectionRequest request,
+                                  HttpServletRequest servletRequest) {
+        return platformService.rejectKycDocuments(currentUserService.requireCurrentUser(), id, request, servletRequest);
+    }
+
     @GetMapping("/{id}/documents")
     public Object documents(@PathVariable("id") String id) {
         return platformService.getKycDocuments(id);

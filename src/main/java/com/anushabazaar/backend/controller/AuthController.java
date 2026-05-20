@@ -71,6 +71,12 @@ public class AuthController {
         return authService.setMpin(currentUserService.requireCurrentUser(), request, servletRequest);
     }
 
+    @PostMapping("/verify-mpin")
+    public Map<String, Object> verifyMpin(@Valid @RequestBody ApiDtos.VerifyMpinRequest request,
+                                          HttpServletRequest servletRequest) {
+        return authService.verifyMpin(currentUserService.requireCurrentUser(), request, servletRequest);
+    }
+
     @PostMapping("/enable-biometric")
     public Map<String, Object> enableBiometric(@Valid @RequestBody ApiDtos.EnableBiometricRequest request,
                                                HttpServletRequest servletRequest) {
