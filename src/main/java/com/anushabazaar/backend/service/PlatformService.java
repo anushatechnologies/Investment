@@ -93,6 +93,7 @@ public class PlatformService {
         kyc.setAadhaarBackPath(storageService.save(aadhaarBack, "kyc"));
         kyc.setSelfiePath(storageService.save(selfiePhoto, "kyc"));
         kyc.setBankProofPath(storageService.save(bankProof, "kyc"));
+        markAllDocumentsPending(kyc);
         kyc.setStatus(DomainEnums.KycStatus.PENDING);
         kyc.setSubmittedAt(LocalDateTime.now());
         kyc.setReviewedByAdminId(null);
@@ -106,6 +107,52 @@ public class PlatformService {
         notifyUser(user.getId(), "KYC submitted", "Your KYC documents are under review.", DomainEnums.NotificationType.KYC_UPDATE);
         auditService.log(user, "KYC_SUBMITTED", "KycSubmission", saved.getId(), null, "PENDING", request);
         return saved;
+    }
+
+    @Transactional
+    public KycSubmission submitPan(User user, MultipartFile panCard, String panNumber, HttpServletRequest request) {
+        if (isBlank(panNumber)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PAN number is required");
+        }
+        KycSubmission kyc = latestOrNewKyc(user);
+        kyc.setPanCardPath(storageService.save(panCard, "kyc"));
+        kyc.setPanCardStatus(DomainEnums.DocumentReviewStatus.PENDING);
+        kyc.setPanCardRejectionReason(null);
+        user.setPanNumber(panNumber);
+        return saveKycProgress(user, kyc, "KYC_PAN_UPLOADED", "PAN uploaded for review", request);
+    }
+
+    @Transactional
+    public KycSubmission submitAadhaar(User user, MultipartFile aadhaarFront, MultipartFile aadhaarBack,
+                                       String aadhaarNumber, String aadhaarLast4, String address,
+                                       HttpServletRequest request) {
+        String last4 = !isBlank(aadhaarLast4) ? aadhaarLast4 : aadhaarNumber == null || aadhaarNumber.length() < 4
+                ? null
+                : aadhaarNumber.substring(aadhaarNumber.length() - 4);
+        if (isBlank(last4) || !last4.matches("\\d{4}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Aadhaar number or last 4 digits are required");
+        }
+        KycSubmission kyc = latestOrNewKyc(user);
+        kyc.setAadhaarFrontPath(storageService.save(aadhaarFront, "kyc"));
+        kyc.setAadhaarBackPath(storageService.save(aadhaarBack, "kyc"));
+        kyc.setAadhaarFrontStatus(DomainEnums.DocumentReviewStatus.PENDING);
+        kyc.setAadhaarBackStatus(DomainEnums.DocumentReviewStatus.PENDING);
+        kyc.setAadhaarFrontRejectionReason(null);
+        kyc.setAadhaarBackRejectionReason(null);
+        user.setAadhaarLast4(last4);
+        if (!isBlank(address)) {
+            user.setAddress(address);
+        }
+        return saveKycProgress(user, kyc, "KYC_AADHAAR_UPLOADED", "Aadhaar uploaded for review", request);
+    }
+
+    @Transactional
+    public KycSubmission uploadSelfie(User user, MultipartFile selfiePhoto, HttpServletRequest request) {
+        KycSubmission kyc = latestOrNewKyc(user);
+        kyc.setSelfiePath(storageService.save(selfiePhoto, "kyc"));
+        kyc.setSelfieStatus(DomainEnums.DocumentReviewStatus.PENDING);
+        kyc.setSelfieRejectionReason(null);
+        return saveKycProgress(user, kyc, "KYC_SELFIE_UPLOADED", "Selfie uploaded for review", request);
     }
 
     private void completeMissingKycProfile(User user, String panNumber, String aadhaarLast4, LocalDate dateOfBirth, String address) {
@@ -138,6 +185,42 @@ public class PlatformService {
         }
     }
 
+    private KycSubmission latestOrNewKyc(User user) {
+        KycSubmission kyc = kycSubmissionRepository.findTopByUserIdOrderBySubmittedAtDesc(user.getId()).orElseGet(KycSubmission::new);
+        kyc.setId(kyc.getId() == null ? UUID.randomUUID().toString() : kyc.getId());
+        kyc.setUserId(user.getId());
+        return kyc;
+    }
+
+    private KycSubmission saveKycProgress(User user, KycSubmission kyc, String auditAction, String notificationMessage, HttpServletRequest request) {
+        kyc.setStatus(DomainEnums.KycStatus.PENDING);
+        kyc.setSubmittedAt(LocalDateTime.now());
+        kyc.setReviewedByAdminId(null);
+        kyc.setReviewedAt(null);
+        kyc.setRejectionReason(null);
+        user.setKycStatus(DomainEnums.KycStatus.PENDING);
+        user.setOnboardingStatus(DomainEnums.OnboardingStatus.KYC_PENDING);
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        KycSubmission saved = kycSubmissionRepository.save(kyc);
+        notifyUser(user.getId(), "KYC updated", notificationMessage, DomainEnums.NotificationType.KYC_UPDATE);
+        auditService.log(user, auditAction, "KycSubmission", saved.getId(), null, "PENDING", request);
+        return saved;
+    }
+
+    private void markAllDocumentsPending(KycSubmission kyc) {
+        kyc.setPanCardStatus(DomainEnums.DocumentReviewStatus.PENDING);
+        kyc.setAadhaarFrontStatus(DomainEnums.DocumentReviewStatus.PENDING);
+        kyc.setAadhaarBackStatus(DomainEnums.DocumentReviewStatus.PENDING);
+        kyc.setSelfieStatus(DomainEnums.DocumentReviewStatus.PENDING);
+        kyc.setBankProofStatus(kyc.getBankProofPath() == null ? DomainEnums.DocumentReviewStatus.NOT_UPLOADED : DomainEnums.DocumentReviewStatus.PENDING);
+        kyc.setPanCardRejectionReason(null);
+        kyc.setAadhaarFrontRejectionReason(null);
+        kyc.setAadhaarBackRejectionReason(null);
+        kyc.setSelfieRejectionReason(null);
+        kyc.setBankProofRejectionReason(null);
+    }
+
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
     }
@@ -159,17 +242,20 @@ public class PlatformService {
         KycSubmission kyc = getKyc(id);
         User user = getUser(kyc.getUserId());
         kyc.setStatus(DomainEnums.KycStatus.APPROVED);
+        kyc.setPanCardStatus(DomainEnums.DocumentReviewStatus.APPROVED);
+        kyc.setAadhaarFrontStatus(DomainEnums.DocumentReviewStatus.APPROVED);
+        kyc.setAadhaarBackStatus(DomainEnums.DocumentReviewStatus.APPROVED);
+        kyc.setSelfieStatus(DomainEnums.DocumentReviewStatus.APPROVED);
+        kyc.setBankProofStatus(kyc.getBankProofPath() == null ? DomainEnums.DocumentReviewStatus.NOT_UPLOADED : DomainEnums.DocumentReviewStatus.APPROVED);
         kyc.setReviewedByAdminId(admin.getId());
         kyc.setReviewedAt(LocalDateTime.now());
         kyc.setAdminNotes(notes);
         user.setKycStatus(DomainEnums.KycStatus.APPROVED);
-        user.setOnboardingStatus(user.isBankVerified()
-                ? DomainEnums.OnboardingStatus.BANK_PENDING
-                : DomainEnums.OnboardingStatus.KYC_PENDING);
+        user.setOnboardingStatus(DomainEnums.OnboardingStatus.KYC_COMPLETED);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         KycSubmission saved = kycSubmissionRepository.save(kyc);
-        notifyUser(user.getId(), "KYC approved", "Your KYC has been approved. You can now invest.", DomainEnums.NotificationType.KYC_UPDATE);
+        notifyUser(user.getId(), "KYC approved", "Your KYC has been approved. Link your bank account to continue.", DomainEnums.NotificationType.KYC_UPDATE);
         auditService.log(admin, "KYC_APPROVED", "KycSubmission", id, null, "APPROVED", request);
         return saved;
     }
@@ -179,6 +265,11 @@ public class PlatformService {
         KycSubmission kyc = getKyc(id);
         User user = getUser(kyc.getUserId());
         kyc.setStatus(DomainEnums.KycStatus.REJECTED);
+        kyc.setPanCardStatus(DomainEnums.DocumentReviewStatus.REJECTED);
+        kyc.setAadhaarFrontStatus(DomainEnums.DocumentReviewStatus.REJECTED);
+        kyc.setAadhaarBackStatus(DomainEnums.DocumentReviewStatus.REJECTED);
+        kyc.setSelfieStatus(DomainEnums.DocumentReviewStatus.REJECTED);
+        kyc.setBankProofStatus(kyc.getBankProofPath() == null ? DomainEnums.DocumentReviewStatus.NOT_UPLOADED : DomainEnums.DocumentReviewStatus.REJECTED);
         kyc.setReviewedByAdminId(admin.getId());
         kyc.setReviewedAt(LocalDateTime.now());
         kyc.setRejectionReason(body.reason());
@@ -193,15 +284,54 @@ public class PlatformService {
         return saved;
     }
 
+    @Transactional
+    public KycSubmission rejectKycDocuments(User admin, String id, ApiDtos.KycDocumentRejectionRequest body, HttpServletRequest request) {
+        KycSubmission kyc = getKyc(id);
+        User user = getUser(kyc.getUserId());
+        if (body.panCard()) {
+            kyc.setPanCardStatus(DomainEnums.DocumentReviewStatus.REUPLOAD_REQUIRED);
+            kyc.setPanCardRejectionReason(body.reason());
+        }
+        if (body.aadhaarFront()) {
+            kyc.setAadhaarFrontStatus(DomainEnums.DocumentReviewStatus.REUPLOAD_REQUIRED);
+            kyc.setAadhaarFrontRejectionReason(body.reason());
+        }
+        if (body.aadhaarBack()) {
+            kyc.setAadhaarBackStatus(DomainEnums.DocumentReviewStatus.REUPLOAD_REQUIRED);
+            kyc.setAadhaarBackRejectionReason(body.reason());
+        }
+        if (body.selfie()) {
+            kyc.setSelfieStatus(DomainEnums.DocumentReviewStatus.REUPLOAD_REQUIRED);
+            kyc.setSelfieRejectionReason(body.reason());
+        }
+        if (body.bankProof()) {
+            kyc.setBankProofStatus(DomainEnums.DocumentReviewStatus.REUPLOAD_REQUIRED);
+            kyc.setBankProofRejectionReason(body.reason());
+        }
+        kyc.setStatus(DomainEnums.KycStatus.REUPLOAD_REQUIRED);
+        kyc.setReviewedByAdminId(admin.getId());
+        kyc.setReviewedAt(LocalDateTime.now());
+        kyc.setRejectionReason(body.reason());
+        kyc.setAdminNotes(body.adminNotes());
+        user.setKycStatus(DomainEnums.KycStatus.REUPLOAD_REQUIRED);
+        user.setOnboardingStatus(DomainEnums.OnboardingStatus.KYC_PENDING);
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        KycSubmission saved = kycSubmissionRepository.save(kyc);
+        notifyUser(user.getId(), "KYC documents need reupload", "Reason: " + body.reason(), DomainEnums.NotificationType.KYC_UPDATE);
+        auditService.log(admin, "KYC_DOCUMENTS_REUPLOAD_REQUIRED", "KycSubmission", id, null, body.reason(), request);
+        return saved;
+    }
+
     public Map<String, String> getKycDocuments(String id) {
         KycSubmission kyc = getKyc(id);
-        return Map.of(
-                "panCard", kyc.getPanCardPath(),
-                "aadhaarFront", kyc.getAadhaarFrontPath(),
-                "aadhaarBack", kyc.getAadhaarBackPath(),
-                "selfie", kyc.getSelfiePath(),
-                "bankProof", kyc.getBankProofPath()
-        );
+        Map<String, String> documents = new LinkedHashMap<>();
+        documents.put("panCard", kyc.getPanCardPath());
+        documents.put("aadhaarFront", kyc.getAadhaarFrontPath());
+        documents.put("aadhaarBack", kyc.getAadhaarBackPath());
+        documents.put("selfie", kyc.getSelfiePath());
+        documents.put("bankProof", kyc.getBankProofPath());
+        return documents;
     }
 
     public List<InvestmentPlan> getActivePlans() {

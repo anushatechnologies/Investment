@@ -28,18 +28,25 @@ public final class ApiDtos {
             @NotBlank String bankIfscCode,
             @NotBlank String bankName,
             String referredByCode,
+            String signupVerificationToken,
             boolean riskDisclosureAccepted,
             boolean investorAgreementAccepted
     ) {
     }
 
-    public record LoginRequest(@Email String email, @NotBlank String password) {
+    public record LoginRequest(@Email String email,
+                               @Pattern(regexp = "\\d{10}") String mobileNumber,
+                               String password,
+                               @Pattern(regexp = "\\d{4,6}") String mpin) {
+    }
+
+    public record VerifyMpinRequest(@Pattern(regexp = "\\d{4,6}") String mpin) {
     }
 
     public record RefreshTokenRequest(@NotBlank String refreshToken) {
     }
 
-    public record ForgotPasswordRequest(@Email String email) {
+    public record ForgotPasswordRequest(@Email String email, @Pattern(regexp = "\\d{10}") String mobileNumber) {
     }
 
     public record ResetPasswordRequest(@NotBlank String token,
@@ -50,10 +57,18 @@ public final class ApiDtos {
                                         @Size(min = 8) @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).+$") String newPassword) {
     }
 
-    public record SendOtpRequest(@Pattern(regexp = "\\d{10}") String mobileNumber, String countryCode) {
+    public record SendOtpRequest(@Pattern(regexp = "\\d{10}") String mobileNumber,
+                                 @Email String email,
+                                 String countryCode,
+                                 String channel,
+                                 Boolean useFirebase) {
     }
 
-    public record VerifyOtpRequest(@NotBlank String idToken) {
+    public record VerifyOtpRequest(String idToken,
+                                   @Pattern(regexp = "\\d{10}") String mobileNumber,
+                                   @Email String email,
+                                   @Pattern(regexp = "\\d{6}") String otp,
+                                   String channel) {
     }
 
     public record FirebaseMobileLoginRequest(@NotBlank String idToken) {
@@ -65,6 +80,7 @@ public final class ApiDtos {
             @NotBlank @Email String email,
             @NotBlank @Size(min = 8) @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).+$") String password,
             String referredByCode,
+            String signupVerificationToken,
             boolean termsAccepted,
             boolean privacyPolicyAccepted,
             boolean kycConsentAccepted
@@ -79,8 +95,9 @@ public final class ApiDtos {
 
     public record VerifyBankRequest(@NotBlank String accountHolderName,
                                     @NotBlank String bankAccountNumber,
+                                    @NotBlank String confirmBankAccountNumber,
                                     @NotBlank String bankIfscCode,
-                                    @NotBlank String bankName) {
+                                    String bankName) {
     }
 
     public record FirebaseMobileRegisterRequest(
@@ -101,6 +118,15 @@ public final class ApiDtos {
     }
 
     public record KycDecisionRequest(String reason, String adminNotes) {
+    }
+
+    public record KycDocumentRejectionRequest(String reason,
+                                             String adminNotes,
+                                             boolean panCard,
+                                             boolean aadhaarFront,
+                                             boolean aadhaarBack,
+                                             boolean selfie,
+                                             boolean bankProof) {
     }
 
     public record CreatePlanRequest(

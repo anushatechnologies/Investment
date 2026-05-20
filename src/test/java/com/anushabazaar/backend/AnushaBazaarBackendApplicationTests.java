@@ -90,6 +90,44 @@ class AnushaBazaarBackendApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("APPROVED"));
 
+        mockMvc.perform(post("/api/bank/link")
+                        .header("Authorization", "Bearer " + investorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "accountHolderName", "Integration Investor",
+                                "bankAccountNumber", "1234567890",
+                                "confirmBankAccountNumber", "1234567890",
+                                "bankIfscCode", "SBIN0001234",
+                                "bankName", "State Bank of India"
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.bankVerified").value(true));
+
+        mockMvc.perform(get("/api/bank/details").header("Authorization", "Bearer " + investorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.bankVerified").value(true));
+
+        mockMvc.perform(post("/api/auth/activate")
+                        .header("Authorization", "Bearer " + investorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nextStep").value("SET_MPIN"));
+
+        mockMvc.perform(post("/api/auth/set-mpin")
+                        .header("Authorization", "Bearer " + investorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("mpin", "135790"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nextStep").value("OPEN_DASHBOARD"));
+
+        mockMvc.perform(post("/api/auth/verify-mpin")
+                        .header("Authorization", "Bearer " + investorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("mpin", "135790"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").exists());
+
         JsonNode plan = firstNode(getJson("/api/plans", investorToken));
         String planId = plan.get("id").asText();
 
@@ -301,7 +339,14 @@ class AnushaBazaarBackendApplicationTests {
     }
 
     private JsonNode registerVerifyAndLogin(String email, String mobileNumber) throws Exception {
-        JsonNode register = postJsonWithoutAuth("/api/auth/register", registrationBody(email, mobileNumber));
+        JsonNode sendOtp = postJsonWithoutAuth("/api/auth/send-otp", Map.of("email", email));
+        JsonNode verifyOtp = postJsonWithoutAuth("/api/auth/verify-otp", Map.of(
+                "email", email,
+                "otp", sendOtp.get("otp").asText()
+        ));
+        Map<String, Object> body = registrationBody(email, mobileNumber);
+        body.put("signupVerificationToken", verifyOtp.get("signupVerificationToken").asText());
+        JsonNode register = postJsonWithoutAuth("/api/auth/register", body);
 
         mockMvc.perform(get("/api/auth/verify-email")
                         .queryParam("token", register.get("verificationToken").asText()))

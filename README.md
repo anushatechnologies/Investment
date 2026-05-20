@@ -11,7 +11,7 @@ Spring Boot + MySQL backend implementing the admin-panel and investor-facing API
 - Spring Boot Actuator
 - Springdoc OpenAPI / Swagger UI
 - MySQL 8
-- Multipart file upload to local `uploads/` storage
+- Multipart file upload to local `uploads/` storage or S3
 
 ## Seeded Users
 
@@ -23,6 +23,9 @@ Spring Boot + MySQL backend implementing the admin-panel and investor-facing API
 - `POST /api/auth/register`
 - `GET /api/auth/verify-email`
 - `POST /api/auth/login`
+- `POST /api/auth/set-mpin`
+- `POST /api/auth/verify-mpin`
+- `POST /api/auth/activate`
 - `POST /api/auth/refresh-token`
 - `POST /api/auth/logout`
 - `POST /api/auth/forgot-password`
@@ -30,11 +33,19 @@ Spring Boot + MySQL backend implementing the admin-panel and investor-facing API
 - `POST /api/auth/change-password`
 
 - `POST /api/kyc/submit`
+- `POST /api/kyc/pan-verify`
+- `POST /api/kyc/aadhaar-verify`
+- `POST /api/kyc/upload-selfie`
 - `GET /api/kyc/status`
 - `GET /api/admin/kyc/pending`
 - `POST /api/admin/kyc/{id}/approve`
 - `POST /api/admin/kyc/{id}/reject`
+- `POST /api/admin/kyc/{id}/documents/reject`
 - `GET /api/admin/kyc/{id}/documents`
+
+- `POST /api/bank/link`
+- `POST /api/bank/verify`
+- `GET /api/bank/details`
 
 - `GET /api/plans`
 - `GET /api/admin/plans`
@@ -105,9 +116,15 @@ mvn spring-boot:run
 
 ## Notes
 
-- File uploads are stored locally under `uploads/`.
+- File uploads are stored locally under `uploads/` by default.
+- To store uploaded images/documents in S3, set:
+  - `APP_FILE_STORAGE_PROVIDER=s3`
+  - `APP_FILE_STORAGE_S3_BUCKET=<bucket>`
+  - `APP_FILE_STORAGE_S3_REGION=ap-south-1`
+  - `APP_FILE_STORAGE_S3_PREFIX=anushabazaar`
+  - `APP_FILE_STORAGE_S3_PUBLIC_BASE_URL=<optional CDN or public bucket URL>`
 - JPA is configured with `ddl-auto: update` for fast setup.
 - JWT access tokens are enabled; refresh tokens are stored in MySQL.
-- Admin approval flows, wallet ledger, referral commissions, fraud alerts, notifications, and audit logging are implemented in the service layer.
+- Admin approval flows, per-document KYC reupload requests, wallet ledger, referral commissions, fraud alerts, notifications, and audit logging are implemented in the service layer.
 - Logging defaults are tuned down to reduce noisy framework and SQL output.
 - API errors now return a consistent JSON structure for validation, forbidden, bad-request, and server errors.

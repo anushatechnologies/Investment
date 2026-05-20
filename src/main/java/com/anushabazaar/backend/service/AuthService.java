@@ -26,10 +26,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 
 @Service
 public class AuthService {
+    private static final Random OTP_RANDOM = new Random();
 
     private final UserRepository userRepository;
     private final WalletRepository walletRepository;
@@ -39,7 +41,10 @@ public class AuthService {
     private final JwtService jwtService;
     private final AuditService auditService;
     private final FirebasePhoneAuthService firebasePhoneAuthService;
+    private final EmailService emailService;
     private final int refreshExpiryDays;
+    private final String frontendBaseUrl;
+    private final boolean exposeGeneratedValues;
 
     public AuthService(UserRepository userRepository,
                        WalletRepository walletRepository,
@@ -49,7 +54,10 @@ public class AuthService {
                        JwtService jwtService,
                        AuditService auditService,
                        FirebasePhoneAuthService firebasePhoneAuthService,
-                       @Value("${app.jwt.refresh-expiry-days}") int refreshExpiryDays) {
+                       EmailService emailService,
+                       @Value("${app.jwt.refresh-expiry-days}") int refreshExpiryDays,
+                       @Value("${app.frontend.base-url}") String frontendBaseUrl,
+                       @Value("${app.email.expose-generated-values:true}") boolean exposeGeneratedValues) {
         this.userRepository = userRepository;
         this.walletRepository = walletRepository;
         this.referralRelationshipRepository = referralRelationshipRepository;
@@ -58,7 +66,10 @@ public class AuthService {
         this.jwtService = jwtService;
         this.auditService = auditService;
         this.firebasePhoneAuthService = firebasePhoneAuthService;
+        this.emailService = emailService;
         this.refreshExpiryDays = refreshExpiryDays;
+        this.frontendBaseUrl = frontendBaseUrl;
+        this.exposeGeneratedValues = exposeGeneratedValues;
     }
 
     @Transactional
@@ -75,6 +86,7 @@ public class AuthService {
         if (request.dateOfBirth().isAfter(LocalDate.now().minusYears(18))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investor must be at least 18 years old");
         }
+        consumeSignupVerification(request.signupVerificationToken(), request.email(), request.mobileNumber());
 
         User user = new User();
         user.setId(UUID.randomUUID().toString());
@@ -105,8 +117,8 @@ public class AuthService {
         user.setPrivacyPolicyAcceptedAt(LocalDateTime.now());
         user.setKycConsentAccepted(true);
         user.setKycConsentAcceptedAt(LocalDateTime.now());
-        user.setBankVerified(true);
-        user.setBankVerifiedAt(LocalDateTime.now());
+        user.setBankVerified(false);
+        user.setBankVerifiedAt(null);
         user.setEmailVerified(false);
         user.setFailedLoginAttempts(0);
         user.setCreatedAt(LocalDateTime.now());
@@ -131,7 +143,7 @@ public class AuthService {
         auditService.log(user, "REGISTERED", "User", user.getId(), null, user.getEmail(), servletRequest);
 
         Map<String, Object> response = new HashMap<>();
-        response.put("message", "Registration successful. Verify email to activate account.");
+        response.put("message", "Registration successful. Verify email, then complete KYC and bank linking.");
         response.put("verificationToken", verificationToken.getTokenValue());
         response.put("userId", user.getId());
         return response;
@@ -147,8 +159,8 @@ public class AuthService {
         User user = userRepository.findById(record.getUserId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
         user.setEmailVerified(true);
-        user.setAccountStatus(DomainEnums.AccountStatus.ACTIVE);
-        user.setOnboardingStatus(DomainEnums.OnboardingStatus.ACTIVE);
+        user.setAccountStatus(DomainEnums.AccountStatus.PENDING);
+        user.setOnboardingStatus(DomainEnums.OnboardingStatus.PASSWORD_CREATED);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         record.setUsed(true);
@@ -159,6 +171,19 @@ public class AuthService {
 
     @Transactional
     public Map<String, Object> login(ApiDtos.LoginRequest request, HttpServletRequest servletRequest) {
+        if (request.email() != null && !request.email().isBlank()) {
+            return loginWithPassword(request, servletRequest);
+        }
+        if (request.mobileNumber() != null && !request.mobileNumber().isBlank()) {
+            return loginWithMpin(request, servletRequest);
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email/password or mobile/MPIN is required");
+    }
+
+    private Map<String, Object> loginWithPassword(ApiDtos.LoginRequest request, HttpServletRequest servletRequest) {
+        if (request.password() == null || request.password().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password is required for email login");
+        }
         User user = userRepository.findByEmail(request.email().toLowerCase())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
 
@@ -198,8 +223,59 @@ public class AuthService {
         );
     }
 
+    private Map<String, Object> loginWithMpin(ApiDtos.LoginRequest request, HttpServletRequest servletRequest) {
+        if (request.mpin() == null || request.mpin().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN is required for mobile login");
+        }
+        User user = userRepository.findByMobileNumber(request.mobileNumber())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
+        validateMpin(user, request.mpin());
+        ensureMobileLoginAllowed(user);
+        user.setFailedLoginAttempts(0);
+        user.setAccountLockedUntil(null);
+        user.setLastLoginAt(LocalDateTime.now());
+        user.setLastLoginIp(servletRequest.getRemoteAddr());
+        userRepository.save(user);
+        auditService.log(user, "MPIN_LOGIN", "User", user.getId(), null, user.getMobileNumber(), servletRequest);
+        return authResponse(user);
+    }
+
     public Map<String, Object> sendOtp(ApiDtos.SendOtpRequest request) {
+        if (request.email() != null && !request.email().isBlank()) {
+            String email = request.email().toLowerCase();
+            ensureEmailAvailable(email);
+            TokenRecord otp = issueOtp(email, DomainEnums.TokenType.SIGNUP_EMAIL_OTP, 10);
+            emailService.sendSignupOtp(email, otp.getTokenValue());
+            Map<String, Object> response = new HashMap<>();
+            response.put("provider", "EMAIL_OTP");
+            response.put("message", emailService.isEnabled() ? "Email OTP sent." : "Email OTP generated. Configure SMTP to send email.");
+            response.put("email", email);
+            response.put("expiresInMinutes", 10);
+            response.put("nextStep", "VERIFY_OTP");
+            if (exposeGeneratedValues) {
+                response.put("otp", otp.getTokenValue());
+            }
+            return response;
+        }
         String countryCode = request.countryCode() == null || request.countryCode().isBlank() ? "+91" : request.countryCode();
+        if (request.mobileNumber() == null || request.mobileNumber().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mobile number or email is required");
+        }
+        if (Boolean.FALSE.equals(request.useFirebase()) || "MOBILE_OTP".equalsIgnoreCase(request.channel())) {
+            ensureMobileAvailable(request.mobileNumber());
+            TokenRecord otp = issueOtp(request.mobileNumber(), DomainEnums.TokenType.SIGNUP_MOBILE_OTP, 10);
+            Map<String, Object> response = new HashMap<>();
+            response.put("provider", "MOBILE_OTP");
+            response.put("message", "Mobile OTP generated. Send this OTP using your SMS provider.");
+            response.put("phoneNumber", countryCode + request.mobileNumber());
+            response.put("mobileNumber", request.mobileNumber());
+            response.put("expiresInMinutes", 10);
+            response.put("nextStep", "VERIFY_OTP");
+            if (exposeGeneratedValues) {
+                response.put("otp", otp.getTokenValue());
+            }
+            return response;
+        }
         boolean userExists = userRepository.findByMobileNumber(request.mobileNumber()).isPresent();
         return Map.of(
                 "provider", "FIREBASE_PHONE_AUTH",
@@ -213,7 +289,16 @@ public class AuthService {
 
     @Transactional
     public Map<String, Object> verifyOtp(ApiDtos.VerifyOtpRequest request, HttpServletRequest servletRequest) {
-        return firebaseMobileLogin(new ApiDtos.FirebaseMobileLoginRequest(request.idToken()), servletRequest);
+        if (request.idToken() != null && !request.idToken().isBlank()) {
+            return firebaseMobileLogin(new ApiDtos.FirebaseMobileLoginRequest(request.idToken()), servletRequest);
+        }
+        if (request.email() != null && !request.email().isBlank()) {
+            return verifyStoredOtp(request.email().toLowerCase(), request.otp(), DomainEnums.TokenType.SIGNUP_EMAIL_OTP, "EMAIL_VERIFIED");
+        }
+        if (request.mobileNumber() != null && !request.mobileNumber().isBlank()) {
+            return verifyStoredOtp(request.mobileNumber(), request.otp(), DomainEnums.TokenType.SIGNUP_MOBILE_OTP, "MOBILE_VERIFIED");
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Firebase idToken or email/mobile OTP is required");
     }
 
     @Transactional
@@ -288,8 +373,8 @@ public class AuthService {
         user.setPrivacyPolicyAcceptedAt(LocalDateTime.now());
         user.setKycConsentAccepted(true);
         user.setKycConsentAcceptedAt(LocalDateTime.now());
-        user.setBankVerified(true);
-        user.setBankVerifiedAt(LocalDateTime.now());
+        user.setBankVerified(false);
+        user.setBankVerifiedAt(null);
         user.setEmailVerified(true);
         user.setFailedLoginAttempts(0);
         user.setLastLoginAt(LocalDateTime.now());
@@ -315,8 +400,8 @@ public class AuthService {
 
         Map<String, Object> response = authResponse(user);
         response.put("userExists", true);
-        response.put("nextStep", "SET_MPIN");
-        response.put("message", "Registration successful. Create MPIN to continue onboarding.");
+        response.put("nextStep", nextOnboardingStep(user));
+        response.put("message", "Registration successful. Complete KYC to continue onboarding.");
         return response;
     }
 
@@ -332,7 +417,6 @@ public class AuthService {
         if (!request.termsAccepted() || !request.privacyPolicyAccepted() || !request.kycConsentAccepted()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Terms, privacy policy, and KYC consent must be accepted");
         }
-
         User user = new User();
         user.setId(UUID.randomUUID().toString());
         user.setFullName(request.fullName());
@@ -391,11 +475,20 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN cannot be a simple or repeated pattern");
         }
         user.setMpinHash(passwordEncoder.encode(request.mpin()));
-        user.setOnboardingStatus(DomainEnums.OnboardingStatus.MPIN_CREATED);
+        user.setOnboardingStatus(DomainEnums.OnboardingStatus.ACTIVE);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         auditService.log(user, "MPIN_CREATED", "User", user.getId(), null, "MPIN_CREATED", servletRequest);
-        return onboardingResponse(user, "COMPLETE_KYC", "MPIN created successfully");
+        return onboardingResponse(user, "OPEN_DASHBOARD", "MPIN created successfully");
+    }
+
+    public Map<String, Object> verifyMpin(User user, ApiDtos.VerifyMpinRequest request, HttpServletRequest servletRequest) {
+        validateMpin(user, request.mpin());
+        user.setLastLoginAt(LocalDateTime.now());
+        user.setLastLoginIp(servletRequest.getRemoteAddr());
+        userRepository.save(user);
+        auditService.log(user, "MPIN_VERIFIED", "User", user.getId(), null, "MPIN_VERIFIED", servletRequest);
+        return authResponse(user);
     }
 
     @Transactional
@@ -411,6 +504,12 @@ public class AuthService {
 
     @Transactional
     public Map<String, Object> verifyBank(User user, ApiDtos.VerifyBankRequest request, HttpServletRequest servletRequest) {
+        if (!request.bankAccountNumber().equals(request.confirmBankAccountNumber())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bank account number and confirmation do not match");
+        }
+        if (user.getKycStatus() != DomainEnums.KycStatus.APPROVED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "KYC must be approved before bank linking");
+        }
         user.setBankAccountNumber(request.bankAccountNumber());
         user.setBankIfscCode(request.bankIfscCode());
         user.setBankName(request.bankName());
@@ -419,9 +518,7 @@ public class AuthService {
         }
         user.setBankVerified(true);
         user.setBankVerifiedAt(LocalDateTime.now());
-        if (user.getKycStatus() == DomainEnums.KycStatus.APPROVED) {
-            user.setOnboardingStatus(DomainEnums.OnboardingStatus.BANK_PENDING);
-        }
+        user.setOnboardingStatus(DomainEnums.OnboardingStatus.BANK_LINKED);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         auditService.log(user, "BANK_VERIFIED", "User", user.getId(), null, request.bankIfscCode(), servletRequest);
@@ -430,9 +527,6 @@ public class AuthService {
 
     @Transactional
     public Map<String, Object> activateOnboarding(User user, HttpServletRequest servletRequest) {
-        if (user.getMpinHash() == null || user.getMpinHash().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Create MPIN before activation");
-        }
         if (!user.isTermsAccepted() || !user.isPrivacyPolicyAccepted() || !user.isKycConsentAccepted()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Required legal consents are missing");
         }
@@ -443,11 +537,11 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bank account must be verified before activation");
         }
         user.setAccountStatus(DomainEnums.AccountStatus.ACTIVE);
-        user.setOnboardingStatus(DomainEnums.OnboardingStatus.ACTIVE);
+        user.setOnboardingStatus(DomainEnums.OnboardingStatus.ACCOUNT_ACTIVATED);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         auditService.log(user, "ACCOUNT_ACTIVATED", "User", user.getId(), null, "ACTIVE", servletRequest);
-        return onboardingResponse(user, "OPEN_DASHBOARD", "Account activated successfully");
+        return onboardingResponse(user, nextOnboardingStep(user), "Account activated successfully");
     }
 
     private void ensureMobileLoginAllowed(User user) {
@@ -487,11 +581,11 @@ public class AuthService {
     }
 
     private String nextOnboardingStep(User user) {
-        if (user.getAccountStatus() == DomainEnums.AccountStatus.ACTIVE && user.getKycStatus() == DomainEnums.KycStatus.APPROVED) {
+        if (user.getAccountStatus() == DomainEnums.AccountStatus.ACTIVE
+                && user.getKycStatus() == DomainEnums.KycStatus.APPROVED
+                && user.getMpinHash() != null
+                && !user.getMpinHash().isBlank()) {
             return "OPEN_DASHBOARD";
-        }
-        if (user.getMpinHash() == null || user.getMpinHash().isBlank()) {
-            return "SET_MPIN";
         }
         if (user.getKycStatus() != DomainEnums.KycStatus.APPROVED) {
             return "COMPLETE_KYC";
@@ -499,7 +593,25 @@ public class AuthService {
         if (!user.isBankVerified()) {
             return "VERIFY_BANK";
         }
-        return "ACTIVATE_ACCOUNT";
+        if (user.getAccountStatus() != DomainEnums.AccountStatus.ACTIVE) {
+            return "ACTIVATE_ACCOUNT";
+        }
+        if (user.getMpinHash() == null || user.getMpinHash().isBlank()) {
+            return "SET_MPIN";
+        }
+        return "OPEN_DASHBOARD";
+    }
+
+    private void validateMpin(User user, String mpin) {
+        if (user.getMpinHash() == null || user.getMpinHash().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN is not set");
+        }
+        if (!passwordEncoder.matches(mpin, user.getMpinHash())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid MPIN");
+        }
+        if (user.getAccountStatus() == DomainEnums.AccountStatus.SUSPENDED || user.getAccountStatus() == DomainEnums.AccountStatus.DEACTIVATED) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account is not active");
+        }
     }
 
     private boolean isWeakMpin(String mpin) {
@@ -534,10 +646,26 @@ public class AuthService {
 
     @Transactional
     public Map<String, Object> forgotPassword(ApiDtos.ForgotPasswordRequest request) {
-        User user = userRepository.findByEmail(request.email().toLowerCase())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        User user;
+        if (request.email() != null && !request.email().isBlank()) {
+            user = userRepository.findByEmail(request.email().toLowerCase())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        } else if (request.mobileNumber() != null && !request.mobileNumber().isBlank()) {
+            user = userRepository.findByMobileNumber(request.mobileNumber())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email or mobile number is required");
+        }
         TokenRecord token = issueToken(user.getId(), DomainEnums.TokenType.PASSWORD_RESET, 24);
-        return Map.of("message", "Password reset token generated", "resetToken", token.getTokenValue());
+        String resetLink = frontendBaseUrl.replaceAll("/+$", "") + "/reset-password?token=" + token.getTokenValue();
+        emailService.sendPasswordReset(user.getEmail(), resetLink, token.getTokenValue());
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", emailService.isEnabled() ? "Password reset email sent" : "Password reset token generated");
+        if (exposeGeneratedValues) {
+            response.put("resetToken", token.getTokenValue());
+            response.put("resetLink", resetLink);
+        }
+        return response;
     }
 
     @Transactional
@@ -566,6 +694,86 @@ public class AuthService {
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         return Map.of("message", "Password updated successfully");
+    }
+
+    private void ensureEmailAvailable(String email) {
+        if (userRepository.findByEmail(email).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
+        }
+    }
+
+    private void ensureMobileAvailable(String mobileNumber) {
+        if (mobileNumber == null || mobileNumber.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mobile number is required");
+        }
+        if (userRepository.findByMobileNumber(mobileNumber).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mobile number already exists");
+        }
+    }
+
+    private TokenRecord issueOtp(String subject, DomainEnums.TokenType type, int expiryMinutes) {
+        TokenRecord token = new TokenRecord();
+        token.setId(UUID.randomUUID().toString());
+        token.setUserId(subject);
+        token.setTokenValue(String.format("%06d", OTP_RANDOM.nextInt(1_000_000)));
+        token.setTokenType(type);
+        token.setExpiresAt(LocalDateTime.now().plusMinutes(expiryMinutes));
+        token.setUsed(false);
+        token.setCreatedAt(LocalDateTime.now());
+        return tokenRecordRepository.save(token);
+    }
+
+    private Map<String, Object> verifyStoredOtp(String subject, String otp, DomainEnums.TokenType type, String verifiedStatus) {
+        if (otp == null || otp.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP is required");
+        }
+        TokenRecord record = tokenRecordRepository.findByUserIdAndTokenTypeAndUsedFalse(subject, type).stream()
+                .filter(candidate -> otp.equals(candidate.getTokenValue()))
+                .max((left, right) -> left.getCreatedAt().compareTo(right.getCreatedAt()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid OTP"));
+        if (record.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP expired");
+        }
+        record.setUsed(true);
+        tokenRecordRepository.save(record);
+        TokenRecord verification = issueSignupVerification(subject);
+        return Map.of(
+                "message", "OTP verified successfully",
+                "verifiedStatus", verifiedStatus,
+                "signupVerificationToken", verification.getTokenValue(),
+                "nextStep", "REGISTER"
+        );
+    }
+
+    private TokenRecord issueSignupVerification(String subject) {
+        TokenRecord token = new TokenRecord();
+        token.setId(UUID.randomUUID().toString());
+        token.setUserId(subject);
+        token.setTokenValue(UUID.randomUUID().toString() + UUID.randomUUID());
+        token.setTokenType(DomainEnums.TokenType.SIGNUP_VERIFICATION);
+        token.setExpiresAt(LocalDateTime.now().plusMinutes(30));
+        token.setUsed(false);
+        token.setCreatedAt(LocalDateTime.now());
+        return tokenRecordRepository.save(token);
+    }
+
+    private void consumeSignupVerification(String signupVerificationToken, String email, String mobileNumber) {
+        if (signupVerificationToken == null || signupVerificationToken.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Verify email or mobile OTP before registration");
+        }
+        TokenRecord record = tokenRecordRepository.findByTokenValueAndTokenTypeAndUsedFalse(signupVerificationToken, DomainEnums.TokenType.SIGNUP_VERIFICATION)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid signup verification token"));
+        if (record.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Signup verification token expired");
+        }
+        String subject = record.getUserId();
+        boolean matchesEmail = email != null && subject.equalsIgnoreCase(email);
+        boolean matchesMobile = mobileNumber != null && subject.equals(mobileNumber);
+        if (!matchesEmail && !matchesMobile) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Signup verification token does not match email or mobile number");
+        }
+        record.setUsed(true);
+        tokenRecordRepository.save(record);
     }
 
     private TokenRecord issueToken(String userId, DomainEnums.TokenType type, int expiryHours) {

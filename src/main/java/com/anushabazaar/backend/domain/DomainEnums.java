@@ -15,7 +15,16 @@ public final class DomainEnums {
         NOT_SUBMITTED,
         PENDING,
         APPROVED,
-        REJECTED
+        REJECTED,
+        REUPLOAD_REQUIRED
+    }
+
+    public enum DocumentReviewStatus {
+        NOT_UPLOADED,
+        PENDING,
+        APPROVED,
+        REJECTED,
+        REUPLOAD_REQUIRED
     }
 
     public enum AccountStatus {
@@ -26,9 +35,16 @@ public final class DomainEnums {
     }
 
     public enum OnboardingStatus {
+        MOBILE_VERIFIED,
+        PROFILE_COMPLETED,
+        PASSWORD_CREATED,
+        TERMS_ACCEPTED,
+        KYC_COMPLETED,
+        BANK_LINKED,
+        ACCOUNT_ACTIVATED,
+        MPIN_CREATED,
         OTP_VERIFIED,
         REGISTERED,
-        MPIN_CREATED,
         KYC_PENDING,
         BANK_PENDING,
         ACTIVE
@@ -130,6 +146,9 @@ public final class DomainEnums {
 
     public enum TokenType {
         EMAIL_VERIFICATION,
+        SIGNUP_EMAIL_OTP,
+        SIGNUP_MOBILE_OTP,
+        SIGNUP_VERIFICATION,
         PASSWORD_RESET,
         REFRESH
     }

@@ -196,6 +196,15 @@ EC2_USER=ec2-user
 APP_PORT=8080
 SPRING_DATASOURCE_URL=jdbc:mysql://<rds-endpoint>:3306/anushabazaar?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
 SPRING_DATASOURCE_USERNAME=admin
+APP_FILE_STORAGE_PROVIDER=s3
+APP_FILE_STORAGE_S3_REGION=ap-south-2
+APP_FILE_STORAGE_S3_PREFIX=anushabazaar
+APP_FILE_STORAGE_S3_PUBLIC_BASE_URL=<optional-cloudfront-or-public-bucket-url>
+APP_EMAIL_ENABLED=true
+APP_EMAIL_EXPOSE_GENERATED_VALUES=false
+APP_FRONTEND_BASE_URL=https://<your-frontend-domain>
+SPRING_MAIL_HOST=smtpout.secureserver.net
+SPRING_MAIL_PORT=587
 ```
 
 ## 8. Add GitHub Repository Secrets
@@ -207,6 +216,10 @@ AWS_GITHUB_ACTIONS_ROLE_ARN=arn:aws:iam::406223548776:role/github-actions-anusha
 EC2_SSH_PRIVATE_KEY=<full private key content from your EC2 .pem file>
 SPRING_DATASOURCE_PASSWORD=<your RDS master password>
 APP_JWT_SECRET=<64+ character JWT secret>
+APP_FILE_STORAGE_S3_BUCKET=<your-s3-bucket-name>
+SPRING_MAIL_USERNAME=<your-godaddy-email-address>
+SPRING_MAIL_PASSWORD=<your-godaddy-email-password>
+APP_EMAIL_FROM=<your-godaddy-email-address>
 ```
 
 Important: `EC2_SSH_PRIVATE_KEY` must include the full key:
@@ -291,5 +304,5 @@ Expected:
 ## Notes
 
 - Local container uploads are stored in Docker volume `investment_uploads`.
-- For production KYC/receipt files, S3 is better than local EC2 Docker volume.
+- For production KYC/receipt files, use S3 by setting `APP_FILE_STORAGE_PROVIDER=s3` and `APP_FILE_STORAGE_S3_BUCKET`.
 - If port `8080` is not open, either open it in the EC2 security group or map `APP_PORT=80`.

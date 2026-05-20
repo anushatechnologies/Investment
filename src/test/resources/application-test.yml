@@ -22,7 +22,7 @@ app:
     access-expiry-hours: 24
     refresh-expiry-days: 7
   file-storage:
-    root: C:/tmp/investment-test-uploads
+    root: target/investment-test-uploads
 
 logging:
   level:
