@@ -15,8 +15,13 @@ Spring Boot + MySQL backend implementing the admin-panel and investor-facing API
 
 ## Seeded Users
 
-- `superadmin@anushabazaar.com` / `Admin@123`
-- `admin@anushabazaar.com` / `Admin@123`
+- Local defaults, when `APP_SEED_DEFAULT_ADMINS=true`:
+  - `superadmin@anushabazaar.com` / `Admin@123`
+  - `admin@anushabazaar.com` / `Admin@123`
+- Production admin seed:
+  - Set `APP_ADMIN_EMAIL` and `APP_ADMIN_PASSWORD`.
+  - The AWS CI/CD workflow reads these from GitHub Secrets and writes them to the EC2 runtime `.env`.
+  - Set `APP_SEED_DEFAULT_ADMINS=false` in production to avoid creating the local default admin accounts.
 
 ## Main API Groups
 
@@ -125,6 +130,7 @@ mvn spring-boot:run
   - `APP_FILE_STORAGE_S3_PUBLIC_BASE_URL=<optional CDN or public bucket URL>`
 - JPA is configured with `ddl-auto: update` for fast setup.
 - JWT access tokens are enabled; refresh tokens are stored in MySQL.
+- Admin panel login uses `POST /api/auth/login` with the configured admin email and password. The response `accessToken` is used as `Authorization: Bearer <accessToken>` for `/api/admin/**` APIs.
 - Admin approval flows, per-document KYC reupload requests, wallet ledger, referral commissions, fraud alerts, notifications, and audit logging are implemented in the service layer.
 - Logging defaults are tuned down to reduce noisy framework and SQL output.
 - API errors now return a consistent JSON structure for validation, forbidden, bad-request, and server errors.

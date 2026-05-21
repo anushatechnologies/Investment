@@ -65,6 +65,12 @@ logging:
     com.anushabazaar.backend: INFO
 
 app:
+  seed:
+    default-admins: ${APP_SEED_DEFAULT_ADMINS:true}
+    admin:
+      email: ${APP_ADMIN_EMAIL:}
+      password: ${APP_ADMIN_PASSWORD:}
+      full-name: ${APP_ADMIN_FULL_NAME:ADMIN}
   frontend:
     base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}
   email:

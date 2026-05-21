@@ -8,6 +8,7 @@ import com.anushabazaar.backend.repository.InvestmentPlanRepository;
 import com.anushabazaar.backend.repository.UserRepository;
 import com.anushabazaar.backend.repository.WalletRepository;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,18 +25,27 @@ public class DataInitializer {
     CommandLineRunner seedData(UserRepository userRepository,
                                WalletRepository walletRepository,
                                InvestmentPlanRepository planRepository,
+                               @Value("${app.seed.default-admins:true}") boolean seedDefaultAdmins,
+                               @Value("${app.seed.admin.email:}") String adminEmail,
+                               @Value("${app.seed.admin.password:}") String adminPassword,
+                               @Value("${app.seed.admin.full-name:ADMIN}") String adminFullName,
                                PasswordEncoder passwordEncoder) {
         return args -> {
-            if (userRepository.findByEmail("superadmin@anushabazaar.com").isEmpty()) {
-                User superAdmin = baseAdmin("SUPER_ADMIN", "superadmin@anushabazaar.com", DomainEnums.Role.SUPER_ADMIN, passwordEncoder);
-                userRepository.save(superAdmin);
-                walletRepository.save(newWallet(superAdmin.getId()));
+            if (seedDefaultAdmins) {
+                seedAdmin(userRepository, walletRepository, passwordEncoder,
+                        "SUPER_ADMIN", "superadmin@anushabazaar.com", "Admin@123", "9000000000",
+                        DomainEnums.Role.SUPER_ADMIN, false);
+                seedAdmin(userRepository, walletRepository, passwordEncoder,
+                        "ADMIN", "admin@anushabazaar.com", "Admin@123", "9000000001",
+                        DomainEnums.Role.ADMIN, false);
             }
-            if (userRepository.findByEmail("admin@anushabazaar.com").isEmpty()) {
-                User admin = baseAdmin("ADMIN", "admin@anushabazaar.com", DomainEnums.Role.ADMIN, passwordEncoder);
-                userRepository.save(admin);
-                walletRepository.save(newWallet(admin.getId()));
+
+            if (!isBlank(adminEmail) && !isBlank(adminPassword)) {
+                seedAdmin(userRepository, walletRepository, passwordEncoder,
+                        adminFullName, adminEmail, adminPassword, "9000000001",
+                        DomainEnums.Role.ADMIN, true);
             }
+
             if (planRepository.count() == 0) {
                 InvestmentPlan plan = new InvestmentPlan();
                 plan.setId(UUID.randomUUID().toString());
@@ -55,13 +65,46 @@ public class DataInitializer {
         };
     }
 
-    private User baseAdmin(String name, String email, DomainEnums.Role role, PasswordEncoder passwordEncoder) {
+    private void seedAdmin(UserRepository userRepository,
+                           WalletRepository walletRepository,
+                           PasswordEncoder passwordEncoder,
+                           String name,
+                           String email,
+                           String password,
+                           String mobileNumber,
+                           DomainEnums.Role role,
+                           boolean updatePassword) {
+        userRepository.findByEmail(email).ifPresentOrElse(existing -> {
+            existing.setFullName(name);
+            existing.setRole(role);
+            existing.setAccountStatus(DomainEnums.AccountStatus.ACTIVE);
+            existing.setOnboardingStatus(DomainEnums.OnboardingStatus.ACTIVE);
+            existing.setEmailVerified(true);
+            existing.setUpdatedAt(LocalDateTime.now());
+            if (updatePassword) {
+                existing.setPasswordHash(passwordEncoder.encode(password));
+            }
+            userRepository.save(existing);
+            ensureWallet(walletRepository, existing.getId());
+        }, () -> {
+            User admin = baseAdmin(name, email, password, mobileNumber, role, passwordEncoder);
+            userRepository.save(admin);
+            walletRepository.save(newWallet(admin.getId()));
+        });
+    }
+
+    private User baseAdmin(String name,
+                           String email,
+                           String password,
+                           String mobileNumber,
+                           DomainEnums.Role role,
+                           PasswordEncoder passwordEncoder) {
         User user = new User();
         user.setId(UUID.randomUUID().toString());
         user.setFullName(name);
         user.setEmail(email);
-        user.setMobileNumber(role == DomainEnums.Role.ADMIN ? "9000000001" : "9000000000");
-        user.setPasswordHash(passwordEncoder.encode("Admin@123"));
+        user.setMobileNumber(mobileNumber);
+        user.setPasswordHash(passwordEncoder.encode(password));
         user.setDateOfBirth(LocalDate.of(1990, 1, 1));
         user.setPanNumber("ABCDE1234F");
         user.setAadhaarLast4("1234");
@@ -91,6 +134,16 @@ public class DataInitializer {
         user.setUpdatedAt(LocalDateTime.now());
         user.setCreatedBy("SYSTEM");
         return user;
+    }
+
+    private void ensureWallet(WalletRepository walletRepository, String userId) {
+        if (walletRepository.findByUserId(userId).isEmpty()) {
+            walletRepository.save(newWallet(userId));
+        }
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private Wallet newWallet(String userId) {
