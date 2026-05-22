@@ -49,6 +49,20 @@ class AnushaBazaarBackendApplicationTests {
     }
 
     @Test
+    void mobileOtpCanBeGeneratedForSignup() throws Exception {
+        mockMvc.perform(post("/api/auth/send-otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "mobileNumber", "9948598350",
+                                "channel", "MOBILE_OTP",
+                                "useFirebase", false
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.provider").value("MOBILE_OTP"))
+                .andExpect(jsonPath("$.otp").exists());
+    }
+
+    @Test
     void publicEndpointsAndRoleProtectionWork() throws Exception {
         mockMvc.perform(get("/actuator/health"))
                 .andExpect(status().isOk())
