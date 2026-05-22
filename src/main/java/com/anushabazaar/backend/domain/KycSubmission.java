@@ -1,9 +1,12 @@
 package com.anushabazaar.backend.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -19,14 +22,24 @@ public class KycSubmission {
     private String selfiePath;
     private String bankProofPath;
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 50)
     private DomainEnums.DocumentReviewStatus panCardStatus;
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 50)
     private DomainEnums.DocumentReviewStatus aadhaarFrontStatus;
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 50)
     private DomainEnums.DocumentReviewStatus aadhaarBackStatus;
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 50)
     private DomainEnums.DocumentReviewStatus selfieStatus;
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 50)
     private DomainEnums.DocumentReviewStatus bankProofStatus;
     private String panCardRejectionReason;
     private String aadhaarFrontRejectionReason;
@@ -34,6 +47,8 @@ public class KycSubmission {
     private String selfieRejectionReason;
     private String bankProofRejectionReason;
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 50)
     private DomainEnums.KycStatus status;
     private LocalDateTime submittedAt;
     private String reviewedByAdminId;

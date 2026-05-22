@@ -1,9 +1,12 @@
 package com.anushabazaar.backend.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -16,8 +19,12 @@ public class Notification {
     private String title;
     private String message;
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 50)
     private DomainEnums.NotificationType type;
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 50)
     private DomainEnums.NotificationChannel channel;
     private boolean readFlag;
     private LocalDateTime readAt;

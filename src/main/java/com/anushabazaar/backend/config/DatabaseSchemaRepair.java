@@ -27,11 +27,28 @@ public class DatabaseSchemaRepair {
         if (datasourceUrl == null || !datasourceUrl.toLowerCase().contains("mysql")) {
             return;
         }
+        repairColumn("token_record", "token_type");
+        repairColumn("users", "onboarding_status");
+        repairColumn("users", "kyc_status");
+        repairColumn("users", "account_status");
+        repairColumn("users", "role");
+        repairColumn("kyc_submission", "status");
+        repairColumn("kyc_submission", "pan_card_status");
+        repairColumn("kyc_submission", "aadhaar_front_status");
+        repairColumn("kyc_submission", "aadhaar_back_status");
+        repairColumn("kyc_submission", "selfie_status");
+        repairColumn("kyc_submission", "bank_proof_status");
+        repairColumn("notification", "type");
+        repairColumn("notification", "channel");
+        repairColumn("audit_log", "actor_role");
+    }
+
+    private void repairColumn(String table, String column) {
         try {
-            jdbcTemplate.execute("ALTER TABLE token_record MODIFY COLUMN token_type varchar(50)");
-            log.info("Ensured token_record.token_type uses varchar storage");
+            jdbcTemplate.execute("ALTER TABLE " + table + " MODIFY COLUMN " + column + " varchar(50)");
+            log.info("Ensured {}.{} uses varchar storage", table, column);
         } catch (Exception ex) {
-            log.warn("Could not repair token_record.token_type column automatically: {}", ex.getMessage());
+            log.warn("Could not repair {}.{} automatically: {}", table, column, ex.getMessage());
         }
     }
 }

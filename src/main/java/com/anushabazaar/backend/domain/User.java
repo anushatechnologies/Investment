@@ -5,6 +5,9 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Column;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -41,12 +44,20 @@ public class User {
     private boolean bankVerified;
     private LocalDateTime bankVerifiedAt;
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 50)
     private DomainEnums.OnboardingStatus onboardingStatus;
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 50)
     private DomainEnums.KycStatus kycStatus;
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 50)
     private DomainEnums.AccountStatus accountStatus;
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 50)
     private DomainEnums.Role role;
     private boolean riskDisclosureAccepted;
     private LocalDateTime riskDisclosureDate;
