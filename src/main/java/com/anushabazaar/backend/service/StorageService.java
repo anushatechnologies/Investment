@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -68,7 +69,10 @@ public class StorageService {
 
     private String saveToS3(MultipartFile file, String category) {
         if (bucket == null || bucket.isBlank()) {
-            throw new IllegalStateException("S3 storage is enabled but app.file-storage.s3.bucket is empty");
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "S3 storage is enabled but APP_FILE_STORAGE_S3_BUCKET is not configured"
+            );
         }
         String key = prefix + "/" + category + "/" + safeName(file.getOriginalFilename());
         try {
@@ -85,6 +89,8 @@ public class StorageService {
             return "s3://" + bucket + "/" + key;
         } catch (IOException ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to read file for S3 upload: " + ex.getMessage(), ex);
+        } catch (SdkException ex) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Failed to upload file to S3: " + ex.getMessage(), ex);
         }
     }
 
