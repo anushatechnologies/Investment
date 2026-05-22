@@ -241,10 +241,19 @@ public class AuthService {
     }
 
     public Map<String, Object> sendOtp(ApiDtos.SendOtpRequest request) {
+        boolean forgotPassword = isForgotPasswordOtp(request.type());
         if (request.email() != null && !request.email().isBlank()) {
             String email = request.email().toLowerCase();
-            ensureEmailAvailable(email);
-            TokenRecord otp = issueOtp(email, DomainEnums.TokenType.SIGNUP_EMAIL_OTP, 10);
+            User existingUser = userRepository.findByEmail(email).orElse(null);
+            if (forgotPassword && existingUser == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+            }
+            if (!forgotPassword) {
+                ensureEmailAvailable(email);
+            }
+            DomainEnums.TokenType tokenType = forgotPassword ? DomainEnums.TokenType.PASSWORD_RESET : DomainEnums.TokenType.SIGNUP_EMAIL_OTP;
+            String subject = forgotPassword ? existingUser.getId() : email;
+            TokenRecord otp = issueOtp(subject, tokenType, 10);
             boolean emailSent = false;
             String emailWarning = null;
             try {
@@ -260,7 +269,8 @@ public class AuthService {
             response.put("message", emailSent ? "Email OTP sent." : "Email OTP generated. Configure SMTP to send email.");
             response.put("email", email);
             response.put("expiresInMinutes", 10);
-            response.put("nextStep", "VERIFY_OTP");
+            response.put("type", forgotPassword ? "FORGOT_PASSWORD" : "REGISTRATION");
+            response.put("nextStep", forgotPassword ? "RESET_PASSWORD" : "VERIFY_OTP");
             if (emailWarning != null) {
                 response.put("warning", emailWarning);
             }
@@ -270,31 +280,48 @@ public class AuthService {
             return response;
         }
         String countryCode = request.countryCode() == null || request.countryCode().isBlank() ? "+91" : request.countryCode();
-        if (request.mobileNumber() == null || request.mobileNumber().isBlank()) {
+        String mobileNumber = normalizeMobileNumber(request.mobileNumber());
+        if (mobileNumber == null || mobileNumber.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mobile number or email is required");
         }
         if (Boolean.FALSE.equals(request.useFirebase()) || "MOBILE_OTP".equalsIgnoreCase(request.channel())) {
-            ensureMobileAvailable(request.mobileNumber());
-            TokenRecord otp = issueOtp(request.mobileNumber(), DomainEnums.TokenType.SIGNUP_MOBILE_OTP, 10);
+            User existingUser = userRepository.findByMobileNumber(mobileNumber).orElse(null);
+            if (forgotPassword && existingUser == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+            }
+            if (!forgotPassword) {
+                ensureMobileAvailable(mobileNumber);
+            }
+            DomainEnums.TokenType tokenType = forgotPassword ? DomainEnums.TokenType.PASSWORD_RESET : DomainEnums.TokenType.SIGNUP_MOBILE_OTP;
+            String subject = forgotPassword ? existingUser.getId() : mobileNumber;
+            TokenRecord otp = issueOtp(subject, tokenType, 10);
             Map<String, Object> response = new HashMap<>();
             response.put("provider", "MOBILE_OTP");
             response.put("message", "Mobile OTP generated. Send this OTP using your SMS provider.");
-            response.put("phoneNumber", countryCode + request.mobileNumber());
-            response.put("mobileNumber", request.mobileNumber());
+            response.put("phoneNumber", countryCode + mobileNumber);
+            response.put("mobileNumber", mobileNumber);
             response.put("expiresInMinutes", 10);
-            response.put("nextStep", "VERIFY_OTP");
+            response.put("type", forgotPassword ? "FORGOT_PASSWORD" : "REGISTRATION");
+            response.put("nextStep", forgotPassword ? "RESET_PASSWORD" : "VERIFY_OTP");
             if (exposeGeneratedValues) {
                 response.put("otp", otp.getTokenValue());
+                if (forgotPassword) {
+                    response.put("resetToken", otp.getTokenValue());
+                }
             }
             return response;
         }
-        boolean userExists = userRepository.findByMobileNumber(request.mobileNumber()).isPresent();
+        boolean userExists = userRepository.findByMobileNumber(mobileNumber).isPresent();
+        if (forgotPassword && !userExists) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found");
+        }
         return Map.of(
                 "provider", "FIREBASE_PHONE_AUTH",
                 "message", "Send OTP from frontend using Firebase Phone Auth.",
-                "phoneNumber", countryCode + request.mobileNumber(),
-                "mobileNumber", request.mobileNumber(),
+                "phoneNumber", countryCode + mobileNumber,
+                "mobileNumber", mobileNumber,
                 "userExists", userExists,
+                "type", forgotPassword ? "FORGOT_PASSWORD" : "REGISTRATION",
                 "nextStep", "VERIFY_OTP"
         );
     }
@@ -305,10 +332,21 @@ public class AuthService {
             return firebaseMobileLogin(new ApiDtos.FirebaseMobileLoginRequest(request.idToken()), servletRequest);
         }
         if (request.email() != null && !request.email().isBlank()) {
+            if (isForgotPasswordOtp(request.type())) {
+                User user = userRepository.findByEmail(request.email().toLowerCase())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+                return verifyPasswordResetOtp(user.getId(), request.otp());
+            }
             return verifyStoredOtp(request.email().toLowerCase(), request.otp(), DomainEnums.TokenType.SIGNUP_EMAIL_OTP, "EMAIL_VERIFIED");
         }
         if (request.mobileNumber() != null && !request.mobileNumber().isBlank()) {
-            return verifyStoredOtp(request.mobileNumber(), request.otp(), DomainEnums.TokenType.SIGNUP_MOBILE_OTP, "MOBILE_VERIFIED");
+            String mobileNumber = normalizeMobileNumber(request.mobileNumber());
+            if (isForgotPasswordOtp(request.type())) {
+                User user = userRepository.findByMobileNumber(mobileNumber)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+                return verifyPasswordResetOtp(user.getId(), request.otp());
+            }
+            return verifyStoredOtp(mobileNumber, request.otp(), DomainEnums.TokenType.SIGNUP_MOBILE_OTP, "MOBILE_VERIFIED");
         }
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Firebase idToken or email/mobile OTP is required");
     }
@@ -755,6 +793,43 @@ public class AuthService {
                 "signupVerificationToken", verification.getTokenValue(),
                 "nextStep", "REGISTER"
         );
+    }
+
+    private Map<String, Object> verifyPasswordResetOtp(String userId, String otp) {
+        if (otp == null || otp.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP is required");
+        }
+        TokenRecord record = tokenRecordRepository.findByUserIdAndTokenTypeAndUsedFalse(userId, DomainEnums.TokenType.PASSWORD_RESET).stream()
+                .filter(candidate -> otp.equals(candidate.getTokenValue()))
+                .max((left, right) -> left.getCreatedAt().compareTo(right.getCreatedAt()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid OTP"));
+        if (record.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP expired");
+        }
+        record.setUsed(true);
+        tokenRecordRepository.save(record);
+        TokenRecord resetToken = issueToken(userId, DomainEnums.TokenType.PASSWORD_RESET, 1);
+        return Map.of(
+                "message", "OTP verified successfully",
+                "verifiedStatus", "PASSWORD_RESET_VERIFIED",
+                "resetToken", resetToken.getTokenValue(),
+                "nextStep", "RESET_PASSWORD"
+        );
+    }
+
+    private boolean isForgotPasswordOtp(String type) {
+        return "FORGOT_PASSWORD".equalsIgnoreCase(type);
+    }
+
+    private String normalizeMobileNumber(String mobileNumber) {
+        if (mobileNumber == null) {
+            return null;
+        }
+        String value = mobileNumber.strip();
+        if (value.startsWith("+91")) {
+            value = value.substring(3);
+        }
+        return value;
     }
 
     private TokenRecord issueSignupVerification(String subject) {

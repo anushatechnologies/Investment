@@ -65,6 +65,28 @@ class AnushaBazaarBackendApplicationTests {
     }
 
     @Test
+    void mobileOtpCanBeGeneratedForForgotPasswordExistingUser() throws Exception {
+        registerVerifyAndLogin("forgot-mobile@example.com", "9948598351");
+
+        JsonNode sendOtp = postJsonWithoutAuth("/api/auth/send-otp", Map.of(
+                "mobileNumber", "+919948598351",
+                "channel", "MOBILE_OTP",
+                "type", "FORGOT_PASSWORD"
+        ));
+        JsonNode verifyOtp = postJsonWithoutAuth("/api/auth/verify-otp", Map.of(
+                "mobileNumber", "+919948598351",
+                "otp", sendOtp.get("otp").asText(),
+                "type", "FORGOT_PASSWORD"
+        ));
+
+        mockMvc.perform(post("/api/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("token", verifyOtp.get("resetToken").asText(), "newPassword", "Investor@456"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Password reset successful"));
+    }
+
+    @Test
     void fileViewServesUploadedFileInline() throws Exception {
         Path upload = Path.of("target/investment-test-uploads/kyc/test-image.png");
         Files.createDirectories(upload.getParent());

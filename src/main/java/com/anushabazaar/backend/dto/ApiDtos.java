@@ -57,18 +57,20 @@ public final class ApiDtos {
                                         @Size(min = 8) @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).+$") String newPassword) {
     }
 
-    public record SendOtpRequest(@Pattern(regexp = "\\d{10}") String mobileNumber,
+    public record SendOtpRequest(@Pattern(regexp = "^(\\+91)?\\d{10}$") String mobileNumber,
                                  @Email String email,
                                  String countryCode,
                                  String channel,
-                                 Boolean useFirebase) {
+                                 Boolean useFirebase,
+                                 String type) {
     }
 
     public record VerifyOtpRequest(String idToken,
-                                   @Pattern(regexp = "\\d{10}") String mobileNumber,
+                                   @Pattern(regexp = "^(\\+91)?\\d{10}$") String mobileNumber,
                                    @Email String email,
                                    @Pattern(regexp = "\\d{6}") String otp,
-                                   String channel) {
+                                   String channel,
+                                   String type) {
     }
 
     public record FirebaseMobileLoginRequest(@NotBlank String idToken) {
