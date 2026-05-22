@@ -73,6 +73,8 @@ app:
       full-name: ${APP_ADMIN_FULL_NAME:ADMIN}
   frontend:
     base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:5174,http://anushatrade.com,https://anushatrade.com,http://www.anushatrade.com,https://www.anushatrade.com}
   email:
     enabled: ${APP_EMAIL_ENABLED:false}
     from: ${APP_EMAIL_FROM:${SPRING_MAIL_USERNAME:}}

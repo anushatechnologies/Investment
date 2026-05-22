@@ -245,13 +245,25 @@ public class AuthService {
             String email = request.email().toLowerCase();
             ensureEmailAvailable(email);
             TokenRecord otp = issueOtp(email, DomainEnums.TokenType.SIGNUP_EMAIL_OTP, 10);
-            emailService.sendSignupOtp(email, otp.getTokenValue());
+            boolean emailSent = false;
+            String emailWarning = null;
+            try {
+                emailSent = emailService.sendSignupOtp(email, otp.getTokenValue());
+            } catch (ResponseStatusException ex) {
+                if (!exposeGeneratedValues) {
+                    throw ex;
+                }
+                emailWarning = ex.getReason();
+            }
             Map<String, Object> response = new HashMap<>();
             response.put("provider", "EMAIL_OTP");
-            response.put("message", emailService.isEnabled() ? "Email OTP sent." : "Email OTP generated. Configure SMTP to send email.");
+            response.put("message", emailSent ? "Email OTP sent." : "Email OTP generated. Configure SMTP to send email.");
             response.put("email", email);
             response.put("expiresInMinutes", 10);
             response.put("nextStep", "VERIFY_OTP");
+            if (emailWarning != null) {
+                response.put("warning", emailWarning);
+            }
             if (exposeGeneratedValues) {
                 response.put("otp", otp.getTokenValue());
             }
