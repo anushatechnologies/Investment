@@ -12,6 +12,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -60,6 +62,20 @@ class AnushaBazaarBackendApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.provider").value("MOBILE_OTP"))
                 .andExpect(jsonPath("$.otp").exists());
+    }
+
+    @Test
+    void fileViewServesUploadedFileInline() throws Exception {
+        Path upload = Path.of("target/investment-test-uploads/kyc/test-image.png");
+        Files.createDirectories(upload.getParent());
+        Files.write(upload, "fake-image".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(get("/api/files/view")
+                        .queryParam("path", "kyc/test-image.png")
+                        .header("Origin", "http://anushatrade.com"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition", "inline"))
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://anushatrade.com"));
     }
 
     @Test

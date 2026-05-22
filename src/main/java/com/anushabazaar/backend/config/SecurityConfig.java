@@ -59,6 +59,7 @@ public class SecurityConfig {
                                 "/api/auth/refresh-token",
                                 "/api/auth/forgot-password",
                                 "/api/auth/reset-password",
+                                "/api/files/view",
                                 "/actuator/health",
                                 "/actuator/info",
                                 "/v3/api-docs/**",
