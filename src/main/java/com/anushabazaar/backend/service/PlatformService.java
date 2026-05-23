@@ -744,14 +744,9 @@ public class PlatformService {
 
     @Transactional
     public User updateUserStatus(User admin, String id, ApiDtos.UpdateUserStatusRequest body, HttpServletRequest request) {
-        if (body == null || body.isActive() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "isActive is required");
-        }
+        DomainEnums.AccountStatus nextStatus = resolveUserStatusUpdate(body);
         User user = getUser(id);
         DomainEnums.AccountStatus previousStatus = user.getAccountStatus();
-        DomainEnums.AccountStatus nextStatus = body.isActive()
-                ? DomainEnums.AccountStatus.ACTIVE
-                : DomainEnums.AccountStatus.DEACTIVATED;
         user.setAccountStatus(nextStatus);
         if (nextStatus == DomainEnums.AccountStatus.ACTIVE) {
             user.setAccountLockedUntil(null);
@@ -760,9 +755,35 @@ public class PlatformService {
         }
         user.setUpdatedAt(LocalDateTime.now());
         User saved = userRepository.save(user);
-        auditService.log(admin, body.isActive() ? "USER_ACTIVATED" : "USER_DEACTIVATED", "User", id,
+        auditService.log(admin, nextStatus == DomainEnums.AccountStatus.ACTIVE ? "USER_ACTIVATED" : "USER_DEACTIVATED", "User", id,
                 previousStatus == null ? null : previousStatus.name(), nextStatus.name(), request);
         return saved;
+    }
+
+    private DomainEnums.AccountStatus resolveUserStatusUpdate(ApiDtos.UpdateUserStatusRequest body) {
+        if (body == null) {
+            return DomainEnums.AccountStatus.ACTIVE;
+        }
+        if (body.isActive() != null) {
+            return body.isActive() ? DomainEnums.AccountStatus.ACTIVE : DomainEnums.AccountStatus.DEACTIVATED;
+        }
+        if (body.active() != null) {
+            return body.active() ? DomainEnums.AccountStatus.ACTIVE : DomainEnums.AccountStatus.DEACTIVATED;
+        }
+        String status = body.accountStatus() == null ? body.status() : body.accountStatus();
+        if (status == null || status.isBlank()) {
+            return DomainEnums.AccountStatus.ACTIVE;
+        }
+        DomainEnums.AccountStatus accountStatus;
+        try {
+            accountStatus = DomainEnums.AccountStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid account status");
+        }
+        if (accountStatus == DomainEnums.AccountStatus.SUSPENDED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use the suspend endpoint to suspend users");
+        }
+        return accountStatus;
     }
 
     @Transactional

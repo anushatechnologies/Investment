@@ -182,6 +182,6 @@ public final class ApiDtos {
     public record SuspendUserRequest(String reason) {
     }
 
-    public record UpdateUserStatusRequest(Boolean isActive) {
+    public record UpdateUserStatusRequest(Boolean isActive, Boolean active, String status, String accountStatus) {
     }
 }

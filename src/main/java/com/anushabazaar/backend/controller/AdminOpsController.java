@@ -45,7 +45,7 @@ public class AdminOpsController {
     }
 
     @PutMapping("/api/admin/users/{id}")
-    public Object updateUserStatus(@PathVariable("id") String id, @RequestBody ApiDtos.UpdateUserStatusRequest request, HttpServletRequest servletRequest) {
+    public Object updateUserStatus(@PathVariable("id") String id, @RequestBody(required = false) ApiDtos.UpdateUserStatusRequest request, HttpServletRequest servletRequest) {
         return platformService.updateUserStatus(currentUserService.requireCurrentUser(), id, request, servletRequest);
     }
 

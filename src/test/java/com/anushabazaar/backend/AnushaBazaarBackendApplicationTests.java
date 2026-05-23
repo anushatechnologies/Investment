@@ -375,6 +375,13 @@ class AnushaBazaarBackendApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accountStatus").value("SUSPENDED"));
 
+        mockMvc.perform(put("/api/admin/users/{id}", investorUserId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountStatus").value("ACTIVE"));
+
         JsonNode fraudAlerts = getJson("/api/admin/fraud-alerts", adminToken);
         if (!fraudAlerts.isEmpty()) {
             mockMvc.perform(post("/api/admin/fraud-alerts/{id}/resolve", fraudAlerts.get(0).get("id").asText())
