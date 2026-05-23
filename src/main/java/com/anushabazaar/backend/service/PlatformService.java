@@ -743,6 +743,29 @@ public class PlatformService {
     }
 
     @Transactional
+    public User updateUserStatus(User admin, String id, ApiDtos.UpdateUserStatusRequest body, HttpServletRequest request) {
+        if (body == null || body.isActive() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "isActive is required");
+        }
+        User user = getUser(id);
+        DomainEnums.AccountStatus previousStatus = user.getAccountStatus();
+        DomainEnums.AccountStatus nextStatus = body.isActive()
+                ? DomainEnums.AccountStatus.ACTIVE
+                : DomainEnums.AccountStatus.DEACTIVATED;
+        user.setAccountStatus(nextStatus);
+        if (nextStatus == DomainEnums.AccountStatus.ACTIVE) {
+            user.setAccountLockedUntil(null);
+            user.setFailedLoginAttempts(0);
+            user.setOnboardingStatus(DomainEnums.OnboardingStatus.ACCOUNT_ACTIVATED);
+        }
+        user.setUpdatedAt(LocalDateTime.now());
+        User saved = userRepository.save(user);
+        auditService.log(admin, body.isActive() ? "USER_ACTIVATED" : "USER_DEACTIVATED", "User", id,
+                previousStatus == null ? null : previousStatus.name(), nextStatus.name(), request);
+        return saved;
+    }
+
+    @Transactional
     public User suspendUser(User admin, String id, ApiDtos.SuspendUserRequest body, HttpServletRequest request) {
         User user = getUser(id);
         user.setAccountStatus(DomainEnums.AccountStatus.SUSPENDED);

@@ -354,6 +354,13 @@ class AnushaBazaarBackendApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()", greaterThanOrEqualTo(1)));
 
+        mockMvc.perform(put("/api/admin/users/{id}", investorUserId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("isActive", true))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accountStatus").value("ACTIVE"));
+
         mockMvc.perform(post("/api/auth/change-password")
                         .header("Authorization", "Bearer " + investorToken)
                         .contentType(MediaType.APPLICATION_JSON)

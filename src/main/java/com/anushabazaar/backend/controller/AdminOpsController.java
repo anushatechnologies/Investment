@@ -44,6 +44,11 @@ public class AdminOpsController {
         return platformService.getAllUsers();
     }
 
+    @PutMapping("/api/admin/users/{id}")
+    public Object updateUserStatus(@PathVariable("id") String id, @RequestBody ApiDtos.UpdateUserStatusRequest request, HttpServletRequest servletRequest) {
+        return platformService.updateUserStatus(currentUserService.requireCurrentUser(), id, request, servletRequest);
+    }
+
     @PostMapping("/api/admin/users/{id}/suspend")
     public Object suspend(@PathVariable("id") String id, @RequestBody(required = false) ApiDtos.SuspendUserRequest request, HttpServletRequest servletRequest) {
         return platformService.suspendUser(currentUserService.requireCurrentUser(), id,
