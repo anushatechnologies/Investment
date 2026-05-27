@@ -345,6 +345,12 @@ public class PlatformService {
         return documents;
     }
 
+    public Map<String, String> getKycDocumentsByUserId(String userId) {
+        KycSubmission kyc = kycSubmissionRepository.findTopByUserIdOrderBySubmittedAtDesc(userId)
+                .orElseThrow(() -> new IllegalArgumentException("KYC submission not found for user"));
+        return getKycDocuments(kyc.getId());
+    }
+
     public List<InvestmentPlan> getActivePlans() {
         return planRepository.findByActiveTrue();
     }

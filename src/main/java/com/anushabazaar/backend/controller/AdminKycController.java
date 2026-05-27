@@ -47,4 +47,9 @@ public class AdminKycController {
     public Object documents(@PathVariable("id") String id) {
         return platformService.getKycDocuments(id);
     }
+
+    @GetMapping("/user/{userId}/documents")
+    public Object userDocuments(@PathVariable("userId") String userId) {
+        return platformService.getKycDocumentsByUserId(userId);
+    }
 }
