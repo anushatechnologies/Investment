@@ -71,7 +71,10 @@ public final class DomainEnums {
         RTGS,
         IMPS,
         UPI,
-        CASH
+        CASH,
+        CARD,
+        NETBANKING,
+        WALLET
     }
 
     public enum WalletTransactionType {

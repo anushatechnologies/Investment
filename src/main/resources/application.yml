@@ -97,3 +97,11 @@ app:
     service-account-path: ${APP_FIREBASE_SERVICE_ACCOUNT_PATH:}
     service-account-json: ${APP_FIREBASE_SERVICE_ACCOUNT_JSON:}
     service-account-base64: ${APP_FIREBASE_SERVICE_ACCOUNT_BASE64:}
+  razorpay:
+    enabled: ${APP_RAZORPAY_ENABLED:false}
+    key-id: ${APP_RAZORPAY_KEY_ID:}
+    key-secret: ${APP_RAZORPAY_KEY_SECRET:}
+    webhook-secret: ${APP_RAZORPAY_WEBHOOK_SECRET:}
+    currency: ${APP_RAZORPAY_CURRENCY:INR}
+    auto-capture: ${APP_RAZORPAY_AUTO_CAPTURE:true}
+    api-base-url: ${APP_RAZORPAY_API_BASE_URL:https://api.razorpay.com/v1}

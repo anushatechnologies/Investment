@@ -155,6 +155,14 @@ public final class ApiDtos {
     public record ApplyInvestmentRequest(@NotBlank String investmentPlanId, @NotNull BigDecimal investmentAmount) {
     }
 
+    public record VerifyRazorpayPaymentRequest(
+            @NotBlank String investmentId,
+            @NotBlank String razorpayOrderId,
+            @NotBlank String razorpayPaymentId,
+            @NotBlank String razorpaySignature
+    ) {
+    }
+
     public record VerifyReceiptRequest(boolean approved, String rejectionReason) {
     }
 

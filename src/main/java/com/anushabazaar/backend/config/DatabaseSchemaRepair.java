@@ -38,6 +38,16 @@ public class DatabaseSchemaRepair {
         repairColumn("kyc_submission", "aadhaar_back_status");
         repairColumn("kyc_submission", "selfie_status");
         repairColumn("kyc_submission", "bank_proof_status");
+        repairColumn("investment", "status");
+        repairColumn("payment_receipt", "payment_mode");
+        repairColumn("payment_receipt", "verification_status");
+        repairColumn("wallet_transaction", "transaction_type");
+        repairColumn("wallet_transaction", "direction");
+        repairColumn("withdrawal_request", "status");
+        repairColumn("referral_commission", "status");
+        repairColumn("interest_record", "status");
+        repairColumn("fraud_alert", "alert_level");
+        repairColumn("fraud_alert", "status");
         repairColumn("notification", "type");
         repairColumn("notification", "channel");
         repairColumn("audit_log", "actor_role");
