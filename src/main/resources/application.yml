@@ -91,6 +91,7 @@ app:
       region: ${APP_FILE_STORAGE_S3_REGION:ap-south-1}
       prefix: ${APP_FILE_STORAGE_S3_PREFIX:anushabazaar}
       public-base-url: ${APP_FILE_STORAGE_S3_PUBLIC_BASE_URL:}
+      fallback-to-local: ${APP_FILE_STORAGE_S3_FALLBACK_TO_LOCAL:true}
   firebase:
     project-id: ${APP_FIREBASE_PROJECT_ID:anushabazaar-2288e}
     service-account-resource: ${APP_FIREBASE_SERVICE_ACCOUNT_RESOURCE:anushabazaar-2288e-firebase-adminsdk-fbsvc-e520eea937.json}

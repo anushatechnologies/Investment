@@ -95,6 +95,11 @@ public class PlatformService {
     public KycSubmission submitKyc(User user, MultipartFile panCard, MultipartFile aadhaarFront, MultipartFile aadhaarBack,
                                    MultipartFile selfiePhoto, MultipartFile bankProof, String panNumber,
                                    String aadhaarLast4, LocalDate dateOfBirth, String address, HttpServletRequest request) {
+        requireFile(panCard, "PAN card image");
+        requireFile(aadhaarFront, "Aadhaar front image");
+        requireFile(aadhaarBack, "Aadhaar back image");
+        requireFile(selfiePhoto, "Selfie/profile photo");
+        requireFile(bankProof, "Bank passbook or statement");
         completeMissingKycProfile(user, panNumber, aadhaarLast4, dateOfBirth, address);
         KycSubmission kyc = kycSubmissionRepository.findTopByUserIdOrderBySubmittedAtDesc(user.getId()).orElseGet(KycSubmission::new);
         kyc.setId(kyc.getId() == null ? UUID.randomUUID().toString() : kyc.getId());
@@ -122,6 +127,7 @@ public class PlatformService {
 
     @Transactional
     public KycSubmission submitPan(User user, MultipartFile panCard, String panNumber, HttpServletRequest request) {
+        requireFile(panCard, "PAN card image");
         if (isBlank(panNumber)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PAN number is required");
         }
@@ -137,6 +143,8 @@ public class PlatformService {
     public KycSubmission submitAadhaar(User user, MultipartFile aadhaarFront, MultipartFile aadhaarBack,
                                        String aadhaarNumber, String aadhaarLast4, String address,
                                        HttpServletRequest request) {
+        requireFile(aadhaarFront, "Aadhaar front image");
+        requireFile(aadhaarBack, "Aadhaar back image");
         String last4 = !isBlank(aadhaarLast4) ? aadhaarLast4 : aadhaarNumber == null || aadhaarNumber.length() < 4
                 ? null
                 : aadhaarNumber.substring(aadhaarNumber.length() - 4);
@@ -159,6 +167,7 @@ public class PlatformService {
 
     @Transactional
     public KycSubmission uploadSelfie(User user, MultipartFile selfiePhoto, HttpServletRequest request) {
+        requireFile(selfiePhoto, "Selfie/profile photo");
         KycSubmission kyc = latestOrNewKyc(user);
         kyc.setSelfiePath(storageService.save(selfiePhoto, "kyc"));
         kyc.setSelfieStatus(DomainEnums.DocumentReviewStatus.PENDING);
@@ -234,6 +243,12 @@ public class PlatformService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private void requireFile(MultipartFile file, String label) {
+        if (file == null || file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, label + " is required");
+        }
     }
 
     public Map<String, Object> getOwnKycStatus(User user) {

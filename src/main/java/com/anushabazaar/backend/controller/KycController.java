@@ -3,9 +3,11 @@ package com.anushabazaar.backend.controller;
 import com.anushabazaar.backend.service.CurrentUserService;
 import com.anushabazaar.backend.service.PlatformService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
 import java.util.Map;
@@ -24,18 +26,21 @@ public class KycController {
     }
 
     @PostMapping("/submit")
-    public Object submit(@RequestParam("panCardImage") MultipartFile panCardImage,
-                         @RequestParam("aadhaarFrontImage") MultipartFile aadhaarFrontImage,
-                         @RequestParam("aadhaarBackImage") MultipartFile aadhaarBackImage,
-                         @RequestParam("selfiePhoto") MultipartFile selfiePhoto,
-                         @RequestParam("bankPassbookOrStatement") MultipartFile bankPassbookOrStatement,
+    public Object submit(@RequestParam(value = "panCardImage", required = false) MultipartFile panCardImage,
+                         @RequestParam(value = "aadhaarFrontImage", required = false) MultipartFile aadhaarFrontImage,
+                         @RequestParam(value = "aadhaarBackImage", required = false) MultipartFile aadhaarBackImage,
+                         @RequestParam(value = "selfiePhoto", required = false) MultipartFile selfiePhoto,
+                         @RequestParam(value = "profilePhoto", required = false) MultipartFile profilePhoto,
+                         @RequestParam(value = "PROFILE_PHOTO", required = false) MultipartFile profilePhotoUpper,
+                         @RequestParam(value = "bankPassbookOrStatement", required = false) MultipartFile bankPassbookOrStatement,
                          @RequestParam(value = "panNumber", required = false) String panNumber,
                          @RequestParam(value = "aadhaarLast4", required = false) String aadhaarLast4,
                          @RequestParam(value = "dateOfBirth", required = false) LocalDate dateOfBirth,
                          @RequestParam(value = "address", required = false) String address,
                          HttpServletRequest request) {
         return platformService.submitKyc(currentUserService.requireCurrentUser(), panCardImage, aadhaarFrontImage,
-                aadhaarBackImage, selfiePhoto, bankPassbookOrStatement, panNumber, aadhaarLast4, dateOfBirth, address, request);
+                aadhaarBackImage, firstPresent(selfiePhoto, profilePhoto, profilePhotoUpper, "selfie/profile photo"),
+                bankPassbookOrStatement, panNumber, aadhaarLast4, dateOfBirth, address, request);
     }
 
     @PostMapping("/pan-verify")
@@ -57,13 +62,29 @@ public class KycController {
     }
 
     @PostMapping("/upload-selfie")
-    public Object uploadSelfie(@RequestParam("selfiePhoto") MultipartFile selfiePhoto,
+    public Object uploadSelfie(@RequestParam(value = "selfiePhoto", required = false) MultipartFile selfiePhoto,
+                               @RequestParam(value = "profilePhoto", required = false) MultipartFile profilePhoto,
+                               @RequestParam(value = "PROFILE_PHOTO", required = false) MultipartFile profilePhotoUpper,
                                HttpServletRequest request) {
-        return platformService.uploadSelfie(currentUserService.requireCurrentUser(), selfiePhoto, request);
+        return platformService.uploadSelfie(currentUserService.requireCurrentUser(),
+                firstPresent(selfiePhoto, profilePhoto, profilePhotoUpper, "selfie/profile photo"), request);
     }
 
     @GetMapping("/status")
     public Map<String, Object> status() {
         return platformService.getOwnKycStatus(currentUserService.requireCurrentUser());
+    }
+
+    private MultipartFile firstPresent(MultipartFile primary, MultipartFile secondary, MultipartFile tertiary, String label) {
+        if (primary != null && !primary.isEmpty()) {
+            return primary;
+        }
+        if (secondary != null && !secondary.isEmpty()) {
+            return secondary;
+        }
+        if (tertiary != null && !tertiary.isEmpty()) {
+            return tertiary;
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, label + " is required");
     }
 }

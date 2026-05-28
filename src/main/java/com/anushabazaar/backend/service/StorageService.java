@@ -8,6 +8,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
@@ -29,11 +31,14 @@ import java.util.UUID;
 @Service
 public class StorageService {
 
+    private static final Logger log = LoggerFactory.getLogger(StorageService.class);
+
     private final Path storageRoot;
     private final String provider;
     private final String bucket;
     private final String prefix;
     private final String publicBaseUrl;
+    private final boolean fallbackToLocal;
     private final S3Client s3Client;
 
     public StorageService(@Value("${app.file-storage.root}") String root,
@@ -41,16 +46,18 @@ public class StorageService {
                           @Value("${app.file-storage.s3.bucket:}") String bucket,
                           @Value("${app.file-storage.s3.region:ap-south-1}") String region,
                           @Value("${app.file-storage.s3.prefix:anushabazaar}") String prefix,
-                          @Value("${app.file-storage.s3.public-base-url:}") String publicBaseUrl) throws IOException {
+                          @Value("${app.file-storage.s3.public-base-url:}") String publicBaseUrl,
+                          @Value("${app.file-storage.s3.fallback-to-local:true}") boolean fallbackToLocal) throws IOException {
         this.storageRoot = Path.of(root);
         this.provider = provider == null ? "local" : provider.toLowerCase(Locale.ROOT);
         this.bucket = bucket;
         this.prefix = normalizePrefix(prefix);
         this.publicBaseUrl = publicBaseUrl == null ? "" : publicBaseUrl.strip();
+        this.fallbackToLocal = fallbackToLocal;
         this.s3Client = "s3".equals(this.provider)
                 ? S3Client.builder().region(Region.of(region)).build()
                 : null;
-        if (!"s3".equals(this.provider)) {
+        if (!"s3".equals(this.provider) || fallbackToLocal) {
             Files.createDirectories(this.storageRoot);
         }
     }
@@ -88,6 +95,10 @@ public class StorageService {
 
     private String saveToS3(MultipartFile file, String category) {
         if (bucket == null || bucket.isBlank()) {
+            if (fallbackToLocal) {
+                log.warn("S3 storage is enabled but bucket is not configured. Falling back to local storage.");
+                return saveToLocal(file, category);
+            }
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     "S3 storage is enabled but APP_FILE_STORAGE_S3_BUCKET is not configured"
@@ -109,6 +120,10 @@ public class StorageService {
         } catch (IOException ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to read file for S3 upload: " + ex.getMessage(), ex);
         } catch (SdkException ex) {
+            if (fallbackToLocal) {
+                log.warn("S3 upload failed. Falling back to local storage. Reason: {}", ex.getMessage());
+                return saveToLocal(file, category);
+            }
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Failed to upload file to S3: " + ex.getMessage(), ex);
         }
     }

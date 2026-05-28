@@ -49,18 +49,29 @@ public class DataInitializer {
             if (planRepository.count() == 0) {
                 InvestmentPlan plan = new InvestmentPlan();
                 plan.setId(UUID.randomUUID().toString());
-                plan.setPlanName("Gold Plan");
-                plan.setDescription("Default seeded investment plan");
+                plan.setPlanName("Anusha Milk Trade");
+                plan.setDescription("Monthly income plan with admin-managed returns.");
                 plan.setMinimumAmount(new BigDecimal("5000"));
                 plan.setMaximumAmount(new BigDecimal("1000000"));
                 plan.setLockInMonths(6);
-                plan.setMonthlyInterestRate(new BigDecimal("1.5"));
+                plan.setMonthlyInterestRate(new BigDecimal("10"));
                 plan.setActive(true);
                 plan.setCreatedByAdminId("SYSTEM");
                 plan.setCreatedAt(LocalDateTime.now());
                 plan.setLastModifiedAt(LocalDateTime.now());
                 plan.setLastModifiedBy("SYSTEM");
                 planRepository.save(plan);
+            } else {
+                planRepository.findAll().stream()
+                        .filter(plan -> "Gold Plan".equalsIgnoreCase(plan.getPlanName()))
+                        .forEach(plan -> {
+                            plan.setPlanName("Anusha Milk Trade");
+                            plan.setDescription("Monthly income plan with admin-managed returns.");
+                            plan.setMonthlyInterestRate(new BigDecimal("10"));
+                            plan.setLastModifiedAt(LocalDateTime.now());
+                            plan.setLastModifiedBy("SYSTEM_MIGRATION");
+                            planRepository.save(plan);
+                        });
             }
         };
     }
