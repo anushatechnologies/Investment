@@ -29,16 +29,6 @@ public class InvestorOpsController {
         return platformService.getReferralCommissions(currentUserService.requireCurrentUser());
     }
 
-    @GetMapping("/api/notifications")
-    public Object notifications() {
-        return platformService.getNotifications(currentUserService.requireCurrentUser());
-    }
-
-    @PostMapping("/api/notifications/{id}/read")
-    public Object markRead(@PathVariable("id") String id, HttpServletRequest request) {
-        return platformService.markNotificationRead(currentUserService.requireCurrentUser(), id, request);
-    }
-
     @GetMapping("/api/dashboard")
     public Object investorDashboard() {
         return platformService.getInvestorDashboard(currentUserService.requireCurrentUser());

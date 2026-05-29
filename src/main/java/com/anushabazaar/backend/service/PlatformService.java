@@ -1120,18 +1120,56 @@ public class PlatformService {
         return notificationRepository.findByUserIdOrderBySentAtDesc(user.getId());
     }
 
+    public Map<String, Object> getNotificationSummary(User user) {
+        return Map.of(
+                "totalNotifications", notificationRepository.findByUserIdOrderBySentAtDesc(user.getId()).size(),
+                "unreadNotifications", notificationRepository.countByUserIdAndReadFlagFalse(user.getId())
+        );
+    }
+
     @Transactional
     public Notification markNotificationRead(User user, String id, HttpServletRequest request) {
-        Notification notification = notificationRepository.findById(id)
+        Notification notification = notificationRepository.findByIdAndUserId(id, user.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification not found"));
-        if (!notification.getUserId().equals(user.getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your notification");
+        if (!notification.isReadFlag()) {
+            notification.setReadFlag(true);
+            notification.setReadAt(LocalDateTime.now());
         }
-        notification.setReadFlag(true);
-        notification.setReadAt(LocalDateTime.now());
         Notification saved = notificationRepository.save(notification);
         auditService.log(user, "NOTIFICATION_READ", "Notification", id, null, "READ", request);
         return saved;
+    }
+
+    @Transactional
+    public Map<String, Object> markAllNotificationsRead(User user, HttpServletRequest request) {
+        List<Notification> notifications = notificationRepository.findByUserIdOrderBySentAtDesc(user.getId());
+        long updatedCount = 0;
+        LocalDateTime now = LocalDateTime.now();
+        for (Notification notification : notifications) {
+            if (!notification.isReadFlag()) {
+                notification.setReadFlag(true);
+                notification.setReadAt(now);
+                updatedCount++;
+            }
+        }
+        notificationRepository.saveAll(notifications);
+        auditService.log(user, "NOTIFICATIONS_READ_ALL", "Notification", user.getId(), null, String.valueOf(updatedCount), request);
+        return Map.of(
+                "message", updatedCount == 0 ? "All notifications were already read" : "Notifications marked as read",
+                "updatedCount", updatedCount
+        );
+    }
+
+    @Transactional
+    public Map<String, Object> deleteNotification(User user, String id, HttpServletRequest request) {
+        Notification notification = notificationRepository.findByIdAndUserId(id, user.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification not found"));
+        notificationRepository.delete(notification);
+        auditService.log(user, "NOTIFICATION_DELETED", "Notification", id, null, "DELETED", request);
+        return Map.of(
+                "message", "Notification deleted successfully",
+                "id", id
+        );
     }
 
     @Transactional

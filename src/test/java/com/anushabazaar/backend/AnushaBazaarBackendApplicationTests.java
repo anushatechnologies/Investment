@@ -322,12 +322,28 @@ class AnushaBazaarBackendApplicationTests {
         mockMvc.perform(get("/api/referrals/commissions").header("Authorization", "Bearer " + investorToken))
                 .andExpect(status().isOk());
 
+        mockMvc.perform(get("/api/notifications/summary").header("Authorization", "Bearer " + investorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.unreadNotifications").exists());
+
         JsonNode notifications = getJson("/api/notifications", investorToken);
         if (!notifications.isEmpty()) {
-            mockMvc.perform(post("/api/notifications/{id}/read", notifications.get(0).get("id").asText())
+            String notificationId = notifications.get(0).get("id").asText();
+
+            mockMvc.perform(post("/api/notifications/{id}/read", notificationId)
                             .header("Authorization", "Bearer " + investorToken))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.readFlag").value(true));
+
+            mockMvc.perform(post("/api/notifications/read-all")
+                            .header("Authorization", "Bearer " + investorToken))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.updatedCount").exists());
+
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/notifications/{id}", notificationId)
+                            .header("Authorization", "Bearer " + investorToken))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(notificationId));
         }
 
         mockMvc.perform(get("/api/dashboard").header("Authorization", "Bearer " + investorToken))
