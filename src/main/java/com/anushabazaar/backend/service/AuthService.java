@@ -683,6 +683,30 @@ public class AuthService {
         return Map.of("accessToken", accessToken);
     }
 
+    public Map<String, Object> validateReferralCode(String referralCode) {
+        String normalizedCode = referralCode == null ? "" : referralCode.trim().toUpperCase();
+        if (normalizedCode.isBlank()) {
+            return Map.of(
+                    "valid", false,
+                    "message", "Referral code is required"
+            );
+        }
+        return userRepository.findByReferralCode(normalizedCode)
+                .map(referrer -> Map.<String, Object>of(
+                        "valid", true,
+                        "referralCode", referrer.getReferralCode(),
+                        "referrerUserId", referrer.getId(),
+                        "referrerName", referrer.getFullName(),
+                        "accountStatus", referrer.getAccountStatus(),
+                        "message", "Referral code is valid"
+                ))
+                .orElseGet(() -> Map.of(
+                        "valid", false,
+                        "referralCode", normalizedCode,
+                        "message", "Referral code not found"
+                ));
+    }
+
     @Transactional
     public Map<String, Object> logout(User user, HttpServletRequest request) {
         tokenRecordRepository.findByUserIdAndTokenTypeAndUsedFalse(user.getId(), DomainEnums.TokenType.REFRESH)
@@ -879,7 +903,7 @@ public class AuthService {
         if (newUser.getReferredByCode() == null || newUser.getReferredByCode().isBlank()) {
             return;
         }
-        userRepository.findByReferralCode(newUser.getReferredByCode()).ifPresent(referrer -> {
+        userRepository.findByReferralCode(newUser.getReferredByCode().trim().toUpperCase()).ifPresent(referrer -> {
             List<String> chain = new ArrayList<>();
             chain.add(referrer.getId());
             referralRelationshipRepository.findByReferredUserIdOrderByReferralLevelAsc(referrer.getId()).stream()

@@ -1,5 +1,6 @@
 package com.anushabazaar.backend.controller;
 
+import com.anushabazaar.backend.dto.ApiDtos;
 import com.anushabazaar.backend.service.CurrentUserService;
 import com.anushabazaar.backend.service.PlatformService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,5 +42,25 @@ public class InvestorOpsController {
     @GetMapping("/api/dashboard")
     public Object investorDashboard() {
         return platformService.getInvestorDashboard(currentUserService.requireCurrentUser());
+    }
+
+    @GetMapping("/api/statements")
+    public Object statements() {
+        return platformService.getInvestorStatements(currentUserService.requireCurrentUser());
+    }
+
+    @GetMapping("/api/security/summary")
+    public Object securitySummary() {
+        return platformService.getSecuritySummary(currentUserService.requireCurrentUser());
+    }
+
+    @GetMapping("/api/support/tickets")
+    public Object supportTickets() {
+        return platformService.getOwnSupportTickets(currentUserService.requireCurrentUser());
+    }
+
+    @PostMapping("/api/support/tickets")
+    public Object createSupportTicket(@RequestBody ApiDtos.CreateSupportTicketRequest body, HttpServletRequest request) {
+        return platformService.createSupportTicket(currentUserService.requireCurrentUser(), body, request);
     }
 }

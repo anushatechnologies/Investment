@@ -155,4 +155,17 @@ public final class DomainEnums {
         PASSWORD_RESET,
         REFRESH
     }
+
+    public enum SupportTicketStatus {
+        OPEN,
+        IN_PROGRESS,
+        RESOLVED,
+        CLOSED
+    }
+
+    public enum SupportTicketPriority {
+        LOW,
+        MEDIUM,
+        HIGH
+    }
 }

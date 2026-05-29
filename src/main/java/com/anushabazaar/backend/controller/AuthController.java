@@ -47,6 +47,11 @@ public class AuthController {
         return authService.verifyOtp(request, servletRequest);
     }
 
+    @GetMapping("/referrals/validate")
+    public Map<String, Object> validateReferral(@RequestParam("code") String code) {
+        return authService.validateReferralCode(code);
+    }
+
     @PostMapping("/firebase-mobile/login")
     public Map<String, Object> firebaseMobileLogin(@Valid @RequestBody ApiDtos.FirebaseMobileLoginRequest request,
                                                    HttpServletRequest servletRequest) {

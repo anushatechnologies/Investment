@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -44,6 +45,7 @@ public class PlatformService {
     private final ReferralCommissionRepository referralCommissionRepository;
     private final InterestRecordRepository interestRecordRepository;
     private final NotificationRepository notificationRepository;
+    private final SupportTicketRepository supportTicketRepository;
     private final FraudAlertRepository fraudAlertRepository;
     private final AuditLogRepository auditLogRepository;
     private final StorageService storageService;
@@ -64,6 +66,7 @@ public class PlatformService {
                            ReferralCommissionRepository referralCommissionRepository,
                            InterestRecordRepository interestRecordRepository,
                            NotificationRepository notificationRepository,
+                           SupportTicketRepository supportTicketRepository,
                            FraudAlertRepository fraudAlertRepository,
                            AuditLogRepository auditLogRepository,
                            StorageService storageService,
@@ -83,6 +86,7 @@ public class PlatformService {
         this.referralCommissionRepository = referralCommissionRepository;
         this.interestRecordRepository = interestRecordRepository;
         this.notificationRepository = notificationRepository;
+        this.supportTicketRepository = supportTicketRepository;
         this.fraudAlertRepository = fraudAlertRepository;
         this.auditLogRepository = auditLogRepository;
         this.storageService = storageService;
@@ -827,11 +831,117 @@ public class PlatformService {
                             );
                         }, Collectors.toList())
                 ));
-        return Map.of("tree", tree);
+        List<Map<String, Object>> levels = tree.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> {
+                    List<Map<String, Object>> members = entry.getValue();
+                    BigDecimal income = referralCommissionRepository.findByBeneficiaryUserIdOrderByCreditedAtDesc(user.getId()).stream()
+                            .filter(commission -> entry.getKey().equals(commission.getReferralLevel()))
+                            .map(ReferralCommission::getCommissionAmount)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    return Map.<String, Object>of(
+                            "level", "Level " + entry.getKey(),
+                            "levelNumber", entry.getKey(),
+                            "members", members.size(),
+                            "count", members.size(),
+                            "income", income,
+                            "users", members
+                    );
+                })
+                .toList();
+        return Map.of("tree", tree, "levels", levels);
     }
 
     public List<ReferralCommission> getReferralCommissions(User user) {
         return referralCommissionRepository.findByBeneficiaryUserIdOrderByCreditedAtDesc(user.getId());
+    }
+
+    public Map<String, Object> getAdminReferralReport() {
+        List<ReferralRelationship> relationships = referralRelationshipRepository.findAll();
+        List<ReferralCommission> commissions = referralCommissionRepository.findAll();
+        Map<String, User> usersById = userRepository.findAll().stream()
+                .collect(Collectors.toMap(User::getId, user -> user));
+        BigDecimal totalCommissions = commissions.stream()
+                .map(ReferralCommission::getCommissionAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal creditedCommissions = commissions.stream()
+                .filter(commission -> commission.getStatus() == DomainEnums.CommissionStatus.CREDITED)
+                .map(ReferralCommission::getCommissionAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        long skippedCommissions = commissions.stream()
+                .filter(commission -> commission.getStatus() == DomainEnums.CommissionStatus.SKIPPED)
+                .count();
+
+        List<Map<String, Object>> levelSummary = REFERRAL_RATES.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> Map.<String, Object>of(
+                        "level", entry.getKey(),
+                        "rate", entry.getValue(),
+                        "relationships", relationships.stream().filter(rel -> entry.getKey().equals(rel.getReferralLevel())).count(),
+                        "commissionAmount", commissions.stream()
+                                .filter(commission -> entry.getKey().equals(commission.getReferralLevel()))
+                                .map(ReferralCommission::getCommissionAmount)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                ))
+                .toList();
+
+        Map<String, BigDecimal> commissionByBeneficiary = commissions.stream()
+                .collect(Collectors.groupingBy(
+                        ReferralCommission::getBeneficiaryUserId,
+                        Collectors.mapping(ReferralCommission::getCommissionAmount, Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))
+                ));
+        Map<String, Long> referralsByBeneficiary = relationships.stream()
+                .collect(Collectors.groupingBy(ReferralRelationship::getReferrerUserId, Collectors.counting()));
+
+        List<Map<String, Object>> topReferrers = referralsByBeneficiary.entrySet().stream()
+                .sorted((left, right) -> Long.compare(right.getValue(), left.getValue()))
+                .limit(10)
+                .map(entry -> {
+                    User referrer = usersById.get(entry.getKey());
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("userId", entry.getKey());
+                    row.put("name", referrer == null ? "Unknown user" : referrer.getFullName());
+                    row.put("email", referrer == null ? null : referrer.getEmail());
+                    row.put("referralCode", referrer == null ? null : referrer.getReferralCode());
+                    row.put("referralCount", entry.getValue());
+                    row.put("commissionAmount", commissionByBeneficiary.getOrDefault(entry.getKey(), BigDecimal.ZERO));
+                    row.put("accountStatus", referrer == null ? null : referrer.getAccountStatus());
+                    return row;
+                })
+                .toList();
+
+        List<Map<String, Object>> recentRelationships = relationships.stream()
+                .sorted(Comparator.comparing(ReferralRelationship::getLinkedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .limit(25)
+                .map(relationship -> {
+                    User referrer = usersById.get(relationship.getReferrerUserId());
+                    User referred = usersById.get(relationship.getReferredUserId());
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", relationship.getId());
+                    row.put("referrerUserId", relationship.getReferrerUserId());
+                    row.put("referrerName", referrer == null ? "Unknown user" : referrer.getFullName());
+                    row.put("referrerCode", referrer == null ? null : referrer.getReferralCode());
+                    row.put("referredUserId", relationship.getReferredUserId());
+                    row.put("referredName", referred == null ? "Unknown user" : referred.getFullName());
+                    row.put("referredEmail", referred == null ? null : referred.getEmail());
+                    row.put("level", relationship.getReferralLevel());
+                    row.put("active", relationship.isActive());
+                    row.put("linkedAt", relationship.getLinkedAt());
+                    return row;
+                })
+                .toList();
+
+        return Map.of(
+                "totalReferralUsers", relationships.stream().map(ReferralRelationship::getReferredUserId).collect(Collectors.toSet()).size(),
+                "activeLinks", relationships.stream().filter(ReferralRelationship::isActive).count(),
+                "totalRelationships", relationships.size(),
+                "totalCommissions", totalCommissions,
+                "creditedCommissions", creditedCommissions,
+                "skippedCommissions", skippedCommissions,
+                "levelSummary", levelSummary,
+                "topReferrers", topReferrers,
+                "recentRelationships", recentRelationships
+        );
     }
 
     public Map<String, Object> getInterestRates() {
@@ -1024,6 +1134,174 @@ public class PlatformService {
         return saved;
     }
 
+    @Transactional
+    public SupportTicket createSupportTicket(User user, ApiDtos.CreateSupportTicketRequest body, HttpServletRequest request) {
+        SupportTicket ticket = new SupportTicket();
+        ticket.setId(UUID.randomUUID().toString());
+        ticket.setUserId(user.getId());
+        ticket.setCategory(firstNonBlank(body.category(), "GENERAL"));
+        ticket.setSubject(body.subject());
+        ticket.setMessage(body.message());
+        ticket.setPriority(resolveSupportPriority(body.priority()));
+        ticket.setStatus(DomainEnums.SupportTicketStatus.OPEN);
+        ticket.setCreatedAt(LocalDateTime.now());
+        ticket.setUpdatedAt(LocalDateTime.now());
+        SupportTicket saved = supportTicketRepository.save(ticket);
+        auditService.log(user, "SUPPORT_TICKET_CREATED", "SupportTicket", saved.getId(), null, saved.getSubject(), request);
+        return saved;
+    }
+
+    public List<SupportTicket> getOwnSupportTickets(User user) {
+        return supportTicketRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+    }
+
+    public List<SupportTicket> getAllSupportTickets() {
+        return supportTicketRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    @Transactional
+    public SupportTicket respondSupportTicket(User admin, String id, ApiDtos.RespondSupportTicketRequest body, HttpServletRequest request) {
+        SupportTicket ticket = supportTicketRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Support ticket not found"));
+        ticket.setStatus(resolveSupportStatus(body.status(), ticket.getStatus()));
+        if (!isBlank(body.adminReply())) {
+            ticket.setAdminReply(body.adminReply());
+            ticket.setRespondedByAdminId(admin.getId());
+        }
+        ticket.setUpdatedAt(LocalDateTime.now());
+        if (ticket.getStatus() == DomainEnums.SupportTicketStatus.RESOLVED || ticket.getStatus() == DomainEnums.SupportTicketStatus.CLOSED) {
+            ticket.setResolvedAt(LocalDateTime.now());
+        }
+        SupportTicket saved = supportTicketRepository.save(ticket);
+        notifyUser(saved.getUserId(), "Support ticket updated", "Ticket " + saved.getSubject() + " is now " + saved.getStatus(), DomainEnums.NotificationType.SYSTEM);
+        auditService.log(admin, "SUPPORT_TICKET_UPDATED", "SupportTicket", id, null, saved.getStatus().name(), request);
+        return saved;
+    }
+
+    public Map<String, Object> getInvestorStatements(User user) {
+        List<WalletTransaction> transactions = walletTransactionRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+        List<InterestRecord> interestRecords = interestRecordRepository.findByInvestorIdOrderByCalculatedAtDesc(user.getId());
+        List<ReferralCommission> commissions = referralCommissionRepository.findByBeneficiaryUserIdOrderByCreditedAtDesc(user.getId());
+        BigDecimal totalCredits = transactions.stream()
+                .filter(tx -> tx.getDirection() == DomainEnums.Direction.CREDIT)
+                .map(WalletTransaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalDebits = transactions.stream()
+                .filter(tx -> tx.getDirection() == DomainEnums.Direction.DEBIT)
+                .map(WalletTransaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalInterest = interestRecords.stream().map(InterestRecord::getInterestAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalReferral = commissions.stream().map(ReferralCommission::getCommissionAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        return Map.of(
+                "walletTransactions", transactions,
+                "interestRecords", interestRecords,
+                "referralCommissions", commissions,
+                "summary", Map.of(
+                        "totalCredits", totalCredits,
+                        "totalDebits", totalDebits,
+                        "totalInterest", totalInterest,
+                        "totalReferral", totalReferral
+                )
+        );
+    }
+
+    public Map<String, Object> getSecuritySummary(User user) {
+        List<AuditLog> events = auditLogRepository.findAllByOrderByOccurredAtDesc().stream()
+                .filter(log -> user.getId().equals(log.getActorUserId()))
+                .limit(25)
+                .toList();
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("emailVerified", user.isEmailVerified());
+        response.put("bankVerified", user.isBankVerified());
+        response.put("biometricEnabled", user.isBiometricEnabled());
+        response.put("mpinCreated", !isBlank(user.getMpinHash()));
+        response.put("lastLoginAt", user.getLastLoginAt());
+        response.put("lastLoginIp", firstNonBlank(user.getLastLoginIp(), "-"));
+        response.put("recentEvents", events);
+        return response;
+    }
+
+    public Map<String, Object> getAdminUser360(String userId) {
+        User user = getUser(userId);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("profile", user);
+        response.put("wallet", walletRepository.findByUserId(userId).orElse(null));
+        response.put("kyc", kycSubmissionRepository.findTopByUserIdOrderBySubmittedAtDesc(userId).orElse(null));
+        response.put("investments", investmentRepository.findByInvestorUserId(userId));
+        response.put("walletTransactions", walletTransactionRepository.findByUserIdOrderByCreatedAtDesc(userId));
+        response.put("withdrawals", withdrawalRepository.findByInvestorIdOrderByRequestedAtDesc(userId));
+        response.put("referralTree", getReferralTree(user));
+        response.put("referralCommissions", referralCommissionRepository.findByBeneficiaryUserIdOrderByCreditedAtDesc(userId));
+        response.put("supportTickets", supportTicketRepository.findByUserIdOrderByCreatedAtDesc(userId));
+        response.put("auditEvents", auditLogRepository.findAllByOrderByOccurredAtDesc().stream()
+                .filter(log -> userId.equals(log.getActorUserId()) || userId.equals(log.getEntityId()))
+                .limit(50)
+                .toList());
+        return response;
+    }
+
+    public Map<String, Object> getFraudRuleSummary() {
+        List<User> investors = userRepository.findByRole(DomainEnums.Role.INVESTOR);
+        List<Map<String, Object>> duplicatePan = duplicateUserField(investors, User::getPanNumber, "PAN");
+        List<Map<String, Object>> duplicateAadhaarLast4 = duplicateUserField(investors, User::getAadhaarLast4, "Aadhaar last 4");
+        List<Map<String, Object>> duplicateBank = duplicateUserField(investors, User::getBankAccountNumber, "Bank account");
+        List<Map<String, Object>> highVelocityReferrers = referralRelationshipRepository.findAll().stream()
+                .collect(Collectors.groupingBy(ReferralRelationship::getReferrerUserId, Collectors.counting()))
+                .entrySet().stream()
+                .filter(entry -> entry.getValue() >= 10)
+                .map(entry -> {
+                    User referrer = userRepository.findById(entry.getKey()).orElse(null);
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("rule", "High referral velocity");
+                    row.put("userId", entry.getKey());
+                    row.put("name", referrer == null ? "Unknown user" : referrer.getFullName());
+                    row.put("count", entry.getValue());
+                    row.put("severity", entry.getValue() >= 25 ? "HIGH" : "MEDIUM");
+                    return row;
+                })
+                .toList();
+        return Map.of(
+                "duplicatePan", duplicatePan,
+                "duplicateAadhaarLast4", duplicateAadhaarLast4,
+                "duplicateBankAccounts", duplicateBank,
+                "highVelocityReferrers", highVelocityReferrers,
+                "totalSignals", duplicatePan.size() + duplicateAadhaarLast4.size() + duplicateBank.size() + highVelocityReferrers.size()
+        );
+    }
+
+    public Map<String, Object> getReferralCommissionReview() {
+        List<ReferralCommission> commissions = referralCommissionRepository.findAll();
+        Map<String, User> usersById = userRepository.findAll().stream().collect(Collectors.toMap(User::getId, user -> user));
+        List<Map<String, Object>> rows = commissions.stream()
+                .sorted(Comparator.comparing(ReferralCommission::getCreditedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(commission -> {
+                    User beneficiary = usersById.get(commission.getBeneficiaryUserId());
+                    User source = usersById.get(commission.getSourceInvestorId());
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", commission.getId());
+                    row.put("beneficiaryName", beneficiary == null ? "Unknown user" : beneficiary.getFullName());
+                    row.put("beneficiaryStatus", beneficiary == null ? null : beneficiary.getAccountStatus());
+                    row.put("sourceInvestorName", source == null ? "Unknown user" : source.getFullName());
+                    row.put("sourceInvestmentId", commission.getSourceInvestmentId());
+                    row.put("month", commission.getCommissionMonth());
+                    row.put("level", commission.getReferralLevel());
+                    row.put("rate", commission.getCommissionRate());
+                    row.put("sourceInterestAmount", commission.getSourceInterestAmount());
+                    row.put("commissionAmount", commission.getCommissionAmount());
+                    row.put("status", commission.getStatus());
+                    row.put("skipReason", commission.getSkipReason());
+                    row.put("creditedAt", commission.getCreditedAt());
+                    return row;
+                })
+                .toList();
+        return Map.of(
+                "commissions", rows,
+                "total", rows.size(),
+                "credited", commissions.stream().filter(c -> c.getStatus() == DomainEnums.CommissionStatus.CREDITED).count(),
+                "skipped", commissions.stream().filter(c -> c.getStatus() == DomainEnums.CommissionStatus.SKIPPED).count()
+        );
+    }
+
     public Map<String, Object> getInvestorDashboard(User user) {
         List<Investment> investments = investmentRepository.findByInvestorUserId(user.getId());
         Wallet wallet = getWalletByUserId(user.getId());
@@ -1044,7 +1322,7 @@ public class PlatformService {
         if (newUser.getReferredByCode() == null || newUser.getReferredByCode().isBlank()) {
             return;
         }
-        Optional<User> directReferrer = userRepository.findByReferralCode(newUser.getReferredByCode());
+        Optional<User> directReferrer = userRepository.findByReferralCode(newUser.getReferredByCode().trim().toUpperCase());
         if (directReferrer.isEmpty()) {
             return;
         }
@@ -1094,6 +1372,62 @@ public class PlatformService {
             }
             referralCommissionRepository.save(commission);
         }
+    }
+
+    private DomainEnums.SupportTicketPriority resolveSupportPriority(String value) {
+        if (isBlank(value)) {
+            return DomainEnums.SupportTicketPriority.MEDIUM;
+        }
+        try {
+            return DomainEnums.SupportTicketPriority.valueOf(value.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            return DomainEnums.SupportTicketPriority.MEDIUM;
+        }
+    }
+
+    private DomainEnums.SupportTicketStatus resolveSupportStatus(String value, DomainEnums.SupportTicketStatus fallback) {
+        if (isBlank(value)) {
+            return fallback == null ? DomainEnums.SupportTicketStatus.OPEN : fallback;
+        }
+        try {
+            return DomainEnums.SupportTicketStatus.valueOf(value.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            return fallback == null ? DomainEnums.SupportTicketStatus.OPEN : fallback;
+        }
+    }
+
+    private List<Map<String, Object>> duplicateUserField(List<User> users, Function<User, String> fieldReader, String rule) {
+        return users.stream()
+                .filter(user -> !isBlank(fieldReader.apply(user)))
+                .collect(Collectors.groupingBy(user -> fieldReader.apply(user).trim().toUpperCase()))
+                .entrySet().stream()
+                .filter(entry -> entry.getValue().size() > 1)
+                .map(entry -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("rule", "Duplicate " + rule);
+                    row.put("value", maskSensitive(entry.getKey()));
+                    row.put("count", entry.getValue().size());
+                    row.put("severity", entry.getValue().size() >= 3 ? "HIGH" : "MEDIUM");
+                    row.put("users", entry.getValue().stream()
+                            .map(user -> {
+                                Map<String, Object> userRow = new LinkedHashMap<>();
+                                userRow.put("userId", user.getId());
+                                userRow.put("name", user.getFullName());
+                                userRow.put("email", user.getEmail());
+                                userRow.put("accountStatus", user.getAccountStatus());
+                                return userRow;
+                            })
+                            .toList());
+                    return row;
+                })
+                .toList();
+    }
+
+    private String maskSensitive(String value) {
+        if (value == null || value.length() <= 4) {
+            return "****";
+        }
+        return "****" + value.substring(value.length() - 4);
     }
 
     @Transactional

@@ -53,6 +53,7 @@ public class SecurityConfig {
                                 "/api/auth/login",
                                 "/api/auth/send-otp",
                                 "/api/auth/verify-otp",
+                                "/api/auth/referrals/validate",
                                 "/api/auth/firebase-mobile/login",
                                 "/api/auth/firebase-mobile/register",
                                 "/api/auth/onboarding/register",

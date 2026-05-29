@@ -75,4 +75,35 @@ public class AdminOpsController {
     public Object monthlyReport() {
         return platformService.getMonthlyReport();
     }
+
+    @GetMapping("/api/admin/referrals/report")
+    public Object referralReport() {
+        return platformService.getAdminReferralReport();
+    }
+
+    @GetMapping("/api/admin/referrals/commissions")
+    public Object referralCommissionReview() {
+        return platformService.getReferralCommissionReview();
+    }
+
+    @GetMapping("/api/admin/users/{id}/360")
+    public Object user360(@PathVariable("id") String id) {
+        return platformService.getAdminUser360(id);
+    }
+
+    @GetMapping("/api/admin/fraud/rules")
+    public Object fraudRules() {
+        return platformService.getFraudRuleSummary();
+    }
+
+    @GetMapping("/api/admin/support/tickets")
+    public Object supportTickets() {
+        return platformService.getAllSupportTickets();
+    }
+
+    @PostMapping("/api/admin/support/tickets/{id}/respond")
+    public Object respondSupportTicket(@PathVariable("id") String id, @RequestBody(required = false) ApiDtos.RespondSupportTicketRequest body, HttpServletRequest request) {
+        ApiDtos.RespondSupportTicketRequest resolved = body == null ? new ApiDtos.RespondSupportTicketRequest("IN_PROGRESS", null) : body;
+        return platformService.respondSupportTicket(currentUserService.requireCurrentUser(), id, resolved, request);
+    }
 }

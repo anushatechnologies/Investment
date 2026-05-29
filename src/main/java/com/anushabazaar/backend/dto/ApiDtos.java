@@ -192,4 +192,13 @@ public final class ApiDtos {
 
     public record UpdateUserStatusRequest(Boolean isActive, Boolean active, String status, String accountStatus) {
     }
+
+    public record CreateSupportTicketRequest(@NotBlank String category,
+                                             @NotBlank String subject,
+                                             @NotBlank String message,
+                                             String priority) {
+    }
+
+    public record RespondSupportTicketRequest(String status, String adminReply) {
+    }
 }
