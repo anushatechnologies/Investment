@@ -444,13 +444,6 @@ class AnushaBazaarBackendApplicationTests {
         body.put("email", email);
         body.put("mobileNumber", mobileNumber);
         body.put("password", "Investor@123");
-        body.put("dateOfBirth", "1995-01-01");
-        body.put("panNumber", "ABCDE1234F");
-        body.put("aadhaarLast4", "1234");
-        body.put("address", "Hyderabad");
-        body.put("bankAccountNumber", "1234567890");
-        body.put("bankIfscCode", "SBIN0001234");
-        body.put("bankName", "State Bank of India");
         body.put("riskDisclosureAccepted", true);
         body.put("investorAgreementAccepted", true);
         return body;
@@ -463,6 +456,10 @@ class AnushaBazaarBackendApplicationTests {
                         .file(file("aadhaarBackImage", "aadhaar-back.jpg"))
                         .file(file("selfiePhoto", "selfie.jpg"))
                         .file(file("bankPassbookOrStatement", "bank.jpg"))
+                        .param("panNumber", "ABCDE1234F")
+                        .param("aadhaarLast4", "1234")
+                        .param("dateOfBirth", "1995-01-01")
+                        .param("address", "Hyderabad")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andReturn();

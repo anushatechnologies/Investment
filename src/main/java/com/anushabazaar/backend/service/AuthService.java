@@ -83,9 +83,6 @@ public class AuthService {
         if (!request.riskDisclosureAccepted() || !request.investorAgreementAccepted()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mandatory consents must be accepted");
         }
-        if (request.dateOfBirth().isAfter(LocalDate.now().minusYears(18))) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investor must be at least 18 years old");
-        }
         consumeSignupVerification(request.signupVerificationToken(), request.email(), request.mobileNumber());
 
         User user = new User();
@@ -94,13 +91,6 @@ public class AuthService {
         user.setEmail(request.email().toLowerCase());
         user.setMobileNumber(request.mobileNumber());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setDateOfBirth(request.dateOfBirth());
-        user.setPanNumber(request.panNumber());
-        user.setAadhaarLast4(request.aadhaarLast4());
-        user.setAddress(request.address());
-        user.setBankAccountNumber(request.bankAccountNumber());
-        user.setBankIfscCode(request.bankIfscCode());
-        user.setBankName(request.bankName());
         user.setReferralCode(UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase());
         user.setReferredByCode(request.referredByCode());
         user.setKycStatus(DomainEnums.KycStatus.NOT_SUBMITTED);
@@ -143,7 +133,7 @@ public class AuthService {
         auditService.log(user, "REGISTERED", "User", user.getId(), null, user.getEmail(), servletRequest);
 
         Map<String, Object> response = new HashMap<>();
-        response.put("message", "Registration successful. Verify email, then complete KYC and bank linking.");
+        response.put("message", "Registration successful. Verify email, then complete KYC, bank linking, activation, and MPIN setup.");
         response.put("verificationToken", verificationToken.getTokenValue());
         response.put("userId", user.getId());
         return response;
@@ -390,9 +380,6 @@ public class AuthService {
         if (!request.riskDisclosureAccepted() || !request.investorAgreementAccepted()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mandatory consents must be accepted");
         }
-        if (request.dateOfBirth().isAfter(LocalDate.now().minusYears(18))) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investor must be at least 18 years old");
-        }
 
         User user = new User();
         user.setId(UUID.randomUUID().toString());
@@ -400,13 +387,6 @@ public class AuthService {
         user.setEmail(request.email().toLowerCase());
         user.setMobileNumber(verifiedPhone.mobileNumber());
         user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
-        user.setDateOfBirth(request.dateOfBirth());
-        user.setPanNumber(request.panNumber());
-        user.setAadhaarLast4(request.aadhaarLast4());
-        user.setAddress(request.address());
-        user.setBankAccountNumber(request.bankAccountNumber());
-        user.setBankIfscCode(request.bankIfscCode());
-        user.setBankName(request.bankName());
         user.setReferralCode(UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase());
         user.setReferredByCode(request.referredByCode());
         user.setKycStatus(DomainEnums.KycStatus.NOT_SUBMITTED);
