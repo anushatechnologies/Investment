@@ -17,6 +17,8 @@ spring:
       max-request-size: 25MB
 
 app:
+  auth:
+    signup-verification-expiry-minutes: 60
   jwt:
     secret: 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
     access-expiry-hours: 24

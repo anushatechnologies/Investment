@@ -43,6 +43,7 @@ public class AuthService {
     private final FirebasePhoneAuthService firebasePhoneAuthService;
     private final EmailService emailService;
     private final int refreshExpiryDays;
+    private final int signupVerificationExpiryMinutes;
     private final String frontendBaseUrl;
     private final boolean exposeGeneratedValues;
 
@@ -56,6 +57,7 @@ public class AuthService {
                        FirebasePhoneAuthService firebasePhoneAuthService,
                        EmailService emailService,
                        @Value("${app.jwt.refresh-expiry-days}") int refreshExpiryDays,
+                       @Value("${app.auth.signup-verification-expiry-minutes:60}") int signupVerificationExpiryMinutes,
                        @Value("${app.frontend.base-url}") String frontendBaseUrl,
                        @Value("${app.email.expose-generated-values:true}") boolean exposeGeneratedValues) {
         this.userRepository = userRepository;
@@ -68,6 +70,7 @@ public class AuthService {
         this.firebasePhoneAuthService = firebasePhoneAuthService;
         this.emailService = emailService;
         this.refreshExpiryDays = refreshExpiryDays;
+        this.signupVerificationExpiryMinutes = signupVerificationExpiryMinutes;
         this.frontendBaseUrl = frontendBaseUrl;
         this.exposeGeneratedValues = exposeGeneratedValues;
     }
@@ -795,6 +798,7 @@ public class AuthService {
                 "message", "OTP verified successfully",
                 "verifiedStatus", verifiedStatus,
                 "signupVerificationToken", verification.getTokenValue(),
+                "signupVerificationExpiresInMinutes", signupVerificationExpiryMinutes,
                 "nextStep", "REGISTER"
         );
     }
@@ -842,7 +846,7 @@ public class AuthService {
         token.setUserId(subject);
         token.setTokenValue(UUID.randomUUID().toString() + UUID.randomUUID());
         token.setTokenType(DomainEnums.TokenType.SIGNUP_VERIFICATION);
-        token.setExpiresAt(LocalDateTime.now().plusMinutes(30));
+        token.setExpiresAt(LocalDateTime.now().plusMinutes(signupVerificationExpiryMinutes));
         token.setUsed(false);
         token.setCreatedAt(LocalDateTime.now());
         return tokenRecordRepository.save(token);

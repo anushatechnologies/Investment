@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -145,7 +146,42 @@ class AnushaBazaarBackendApplicationTests {
         mockMvc.perform(get("/api/admin/kyc/{id}/documents", kycId).header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.panCard").exists())
-                .andExpect(jsonPath("$.bankProof").exists());
+                .andExpect(jsonPath("$.bankProof").exists())
+                .andExpect(jsonPath("$.panCardStatus").value("PENDING"));
+
+        mockMvc.perform(post("/api/admin/kyc/{id}/documents/reject", kycId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "reason", "Please reupload PAN card",
+                                "adminNotes", "PAN blur",
+                                "panCard", true,
+                                "aadhaarFront", false,
+                                "aadhaarBack", false,
+                                "selfie", false,
+                                "bankProof", false
+                        ))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REUPLOAD_REQUIRED"))
+                .andExpect(jsonPath("$.panCardStatus").value("REUPLOAD_REQUIRED"));
+
+        mockMvc.perform(get("/api/kyc/status").header("Authorization", "Bearer " + investorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.kycStatus").value("REUPLOAD_REQUIRED"))
+                .andExpect(jsonPath("$.submission.panCardStatus").value("REUPLOAD_REQUIRED"))
+                .andExpect(jsonPath("$.submission.panCardRejectionReason").value("Please reupload PAN card"));
+
+        mockMvc.perform(multipart("/api/kyc/submit")
+                        .file(file("panCardImage", "pan-reupload.jpg"))
+                        .param("panNumber", "ABCDE1234F")
+                        .param("aadhaarLast4", "1234")
+                        .param("dateOfBirth", "1995-01-01")
+                        .param("address", "Hyderabad")
+                        .header("Authorization", "Bearer " + investorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.panCardStatus").value("PENDING"))
+                .andExpect(jsonPath("$.aadhaarFrontStatus").value("PENDING"));
 
         mockMvc.perform(post("/api/admin/kyc/{id}/approve", kycId)
                         .header("Authorization", "Bearer " + adminToken)
@@ -438,6 +474,7 @@ class AnushaBazaarBackendApplicationTests {
                 "email", email,
                 "otp", sendOtp.get("otp").asText()
         ));
+        assertThat(verifyOtp.get("signupVerificationExpiresInMinutes").asInt()).isEqualTo(60);
         Map<String, Object> body = registrationBody(email, mobileNumber);
         body.put("signupVerificationToken", verifyOtp.get("signupVerificationToken").asText());
         JsonNode register = postJsonWithoutAuth("/api/auth/register", body);

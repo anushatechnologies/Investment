@@ -39,7 +39,7 @@ public class KycController {
                          @RequestParam(value = "address", required = false) String address,
                          HttpServletRequest request) {
         return platformService.submitKyc(currentUserService.requireCurrentUser(), panCardImage, aadhaarFrontImage,
-                aadhaarBackImage, firstPresent(selfiePhoto, profilePhoto, profilePhotoUpper, "selfie/profile photo"),
+                aadhaarBackImage, firstPresentOptional(selfiePhoto, profilePhoto, profilePhotoUpper),
                 bankPassbookOrStatement, panNumber, aadhaarLast4, dateOfBirth, address, request);
     }
 
@@ -86,5 +86,18 @@ public class KycController {
             return tertiary;
         }
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, label + " is required");
+    }
+
+    private MultipartFile firstPresentOptional(MultipartFile primary, MultipartFile secondary, MultipartFile tertiary) {
+        if (primary != null && !primary.isEmpty()) {
+            return primary;
+        }
+        if (secondary != null && !secondary.isEmpty()) {
+            return secondary;
+        }
+        if (tertiary != null && !tertiary.isEmpty()) {
+            return tertiary;
+        }
+        return null;
     }
 }

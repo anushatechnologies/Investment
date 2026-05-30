@@ -79,6 +79,8 @@ app:
     enabled: ${APP_EMAIL_ENABLED:false}
     from: ${APP_EMAIL_FROM:${SPRING_MAIL_USERNAME:}}
     expose-generated-values: ${APP_EMAIL_EXPOSE_GENERATED_VALUES:true}
+  auth:
+    signup-verification-expiry-minutes: ${APP_AUTH_SIGNUP_VERIFICATION_EXPIRY_MINUTES:60}
   jwt:
     secret: ${APP_JWT_SECRET:0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF}
     access-expiry-hours: ${APP_JWT_ACCESS_EXPIRY_HOURS:24}
