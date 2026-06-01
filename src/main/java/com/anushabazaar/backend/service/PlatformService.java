@@ -345,7 +345,9 @@ public class PlatformService {
                                          String currentPath,
                                          DomainEnums.DocumentReviewStatus status,
                                          String label) {
-        if (isEmptyFile(file) && (isBlank(currentPath) || status == DomainEnums.DocumentReviewStatus.REUPLOAD_REQUIRED)) {
+        if (isEmptyFile(file) && (isBlank(currentPath)
+                || status == DomainEnums.DocumentReviewStatus.REUPLOAD_REQUIRED
+                || status == DomainEnums.DocumentReviewStatus.REJECTED)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, label + " is required");
         }
     }
@@ -387,6 +389,17 @@ public class PlatformService {
         KycSubmission kyc = kycSubmissionRepository.findTopByUserIdOrderBySubmittedAtDesc(user.getId()).orElse(null);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("kycStatus", user.getKycStatus());
+        response.put("onboardingStatus", user.getOnboardingStatus());
+        response.put("accountStatus", user.getAccountStatus());
+        response.put("bankVerified", user.isBankVerified());
+        response.put("mpinCreated", !isBlank(user.getMpinHash()));
+        response.put("canUpload", user.getKycStatus() != DomainEnums.KycStatus.APPROVED);
+        response.put("profile", Map.of(
+                "panNumber", firstNonBlank(user.getPanNumber(), ""),
+                "aadhaarLast4", firstNonBlank(user.getAadhaarLast4(), ""),
+                "dateOfBirth", user.getDateOfBirth() == null ? "" : user.getDateOfBirth(),
+                "address", firstNonBlank(user.getAddress(), "")
+        ));
         response.put("submission", kyc);
         return response;
     }

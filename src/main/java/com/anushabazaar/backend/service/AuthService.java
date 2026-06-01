@@ -204,16 +204,9 @@ public class AuthService {
         user.setLastLoginIp(servletRequest.getRemoteAddr());
         userRepository.save(user);
 
-        String accessToken = jwtService.generateAccessToken(user.getEmail(), user.getId(), user.getRole().name());
-        TokenRecord refreshToken = issueToken(user.getId(), DomainEnums.TokenType.REFRESH, refreshExpiryDays * 24);
         auditService.log(user, "LOGIN", "User", user.getId(), null, user.getEmail(), servletRequest);
 
-        return Map.of(
-                "accessToken", accessToken,
-                "refreshToken", refreshToken.getTokenValue(),
-                "role", user.getRole(),
-                "userId", user.getId()
-        );
+        return authResponse(user);
     }
 
     private Map<String, Object> loginWithMpin(ApiDtos.LoginRequest request, HttpServletRequest servletRequest) {
@@ -508,11 +501,11 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN cannot be a simple or repeated pattern");
         }
         user.setMpinHash(passwordEncoder.encode(request.mpin()));
-        user.setOnboardingStatus(DomainEnums.OnboardingStatus.ACTIVE);
+        user.setOnboardingStatus(resolveMpinOnboardingStatus(user));
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         auditService.log(user, "MPIN_CREATED", "User", user.getId(), null, "MPIN_CREATED", servletRequest);
-        return onboardingResponse(user, "OPEN_DASHBOARD", "MPIN created successfully");
+        return onboardingResponse(user, nextOnboardingStep(user), "MPIN created successfully");
     }
 
     public Map<String, Object> verifyMpin(User user, ApiDtos.VerifyMpinRequest request, HttpServletRequest servletRequest) {
@@ -596,6 +589,7 @@ public class AuthService {
         response.put("onboardingStatus", user.getOnboardingStatus());
         response.put("bankVerified", user.isBankVerified());
         response.put("mpinCreated", user.getMpinHash() != null && !user.getMpinHash().isBlank());
+        response.put("nextStep", nextOnboardingStep(user));
         return response;
     }
 
@@ -633,6 +627,15 @@ public class AuthService {
             return "SET_MPIN";
         }
         return "OPEN_DASHBOARD";
+    }
+
+    private DomainEnums.OnboardingStatus resolveMpinOnboardingStatus(User user) {
+        if (user.getAccountStatus() == DomainEnums.AccountStatus.ACTIVE
+                && user.getKycStatus() == DomainEnums.KycStatus.APPROVED
+                && user.isBankVerified()) {
+            return DomainEnums.OnboardingStatus.ACTIVE;
+        }
+        return DomainEnums.OnboardingStatus.MPIN_CREATED;
     }
 
     private void validateMpin(User user, String mpin) {
