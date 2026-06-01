@@ -82,6 +82,7 @@ public final class DomainEnums {
         REFERRAL_COMMISSION,
         WITHDRAWAL_DEBIT,
         INVESTMENT_CREDIT,
+        COUPON_CASHBACK,
         REFUND,
         PENALTY,
         ADMIN_ADJUSTMENT

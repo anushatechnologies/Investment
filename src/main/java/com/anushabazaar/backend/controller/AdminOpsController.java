@@ -86,6 +86,16 @@ public class AdminOpsController {
         return platformService.getReferralCommissionReview();
     }
 
+    @GetMapping("/api/admin/referrals/settings")
+    public Object referralSettings() {
+        return platformService.getReferralSettings();
+    }
+
+    @PutMapping("/api/admin/referrals/settings")
+    public Object updateReferralSettings(@RequestBody ApiDtos.UpdateReferralSettingsRequest request, HttpServletRequest servletRequest) {
+        return platformService.updateReferralSettings(currentUserService.requireCurrentUser(), request, servletRequest);
+    }
+
     @GetMapping("/api/admin/users/{id}/360")
     public Object user360(@PathVariable("id") String id) {
         return platformService.getAdminUser360(id);

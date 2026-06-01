@@ -523,8 +523,9 @@ public class PlatformService {
 
     public List<Coupon> getActiveCouponsForInvestor() {
         LocalDateTime now = LocalDateTime.now();
-        return couponRepository.findByStatusAndValidUntilAfterOrderByCreatedAtDesc(DomainEnums.CouponStatus.ACTIVE, now).stream()
+        return couponRepository.findByStatusOrderByCreatedAtDesc(DomainEnums.CouponStatus.ACTIVE).stream()
                 .filter(coupon -> coupon.getValidFrom() == null || !coupon.getValidFrom().isAfter(now))
+                .filter(coupon -> coupon.getValidUntil() == null || !coupon.getValidUntil().isBefore(now))
                 .toList();
     }
 
@@ -562,7 +563,7 @@ public class PlatformService {
     @Transactional
     public Coupon updateCoupon(User admin, String couponId, ApiDtos.UpdateCouponRequest body, HttpServletRequest request) {
         Coupon coupon = getCoupon(couponId);
-        applyCouponFields(coupon, coupon.getCode(), body.description(), body.type(), body.valueAmount(), body.minimumInvestmentAmount(),
+        applyCouponFields(coupon, body.title(), body.description(), body.type(), body.valueAmount(), body.minimumInvestmentAmount(),
                 body.maximumCashbackAmount(), body.totalUsageLimit(), body.perUserUsageLimit(), body.firstInvestmentOnly(),
                 body.validFrom(), body.validUntil(), body.status(), admin.getId(), false);
         coupon.setTitle(body.title());
@@ -728,22 +729,23 @@ public class PlatformService {
         notifyUser(user.getId(), "Payment initiated", "Razorpay checkout order created for your investment.", DomainEnums.NotificationType.INVESTMENT_UPDATE);
         auditService.log(user, "RAZORPAY_ORDER_CREATED", "RazorpayPayment", savedPayment.getId(), null, savedPayment.getRazorpayOrderId(), request);
 
+        Map<String, Object> checkout = new LinkedHashMap<>();
+        checkout.put("keyId", razorpayGatewayService.properties().getKeyId());
+        checkout.put("orderId", savedPayment.getRazorpayOrderId());
+        checkout.put("amount", savedPayment.getAmount());
+        checkout.put("currency", savedPayment.getCurrency());
+        checkout.put("investorName", user.getFullName());
+        checkout.put("investorEmail", user.getEmail());
+        checkout.put("investorContact", user.getMobileNumber());
+        checkout.put("planName", plan.getPlanName());
+        checkout.put("description", "Investment for " + plan.getPlanName());
+        checkout.put("couponCode", savedInvestment.getAppliedCouponCode());
+        checkout.put("couponCashbackAmount", savedInvestment.getCouponCashbackAmount() == null ? BigDecimal.ZERO : savedInvestment.getCouponCashbackAmount());
+
         return Map.of(
                 "investment", savedInvestment,
                 "payment", savedPayment,
-                "checkout", Map.of(
-                        "keyId", razorpayGatewayService.properties().getKeyId(),
-                        "orderId", savedPayment.getRazorpayOrderId(),
-                        "amount", savedPayment.getAmount(),
-                        "currency", savedPayment.getCurrency(),
-                        "investorName", user.getFullName(),
-                        "investorEmail", user.getEmail(),
-                        "investorContact", user.getMobileNumber(),
-                        "planName", plan.getPlanName(),
-                        "description", "Investment for " + plan.getPlanName(),
-                        "couponCode", savedInvestment.getAppliedCouponCode(),
-                        "couponCashbackAmount", savedInvestment.getCouponCashbackAmount() == null ? BigDecimal.ZERO : savedInvestment.getCouponCashbackAmount()
-                )
+                "checkout", checkout
         );
     }
 
@@ -851,6 +853,7 @@ public class PlatformService {
         investment.setStatus(DomainEnums.InvestmentStatus.CANCELLED);
         investment.setCancellationReason(body.reason());
         Investment saved = investmentRepository.save(investment);
+        cancelCouponRedemption(saved.getId());
         auditService.log(user, "INVESTMENT_CANCELLED", "Investment", id, null, body.reason(), request);
         return saved;
     }
@@ -877,6 +880,7 @@ public class PlatformService {
             receipt.setRejectionReason(body.rejectionReason());
             investment.setReceiptApproved(false);
             investment.setStatus(DomainEnums.InvestmentStatus.REJECTED);
+            cancelCouponRedemption(investment.getId());
             notifyUser(investment.getInvestorUserId(), "Receipt rejected", "Receipt rejected. Reason: " + body.rejectionReason(), DomainEnums.NotificationType.INVESTMENT_UPDATE);
         }
         paymentReceiptRepository.save(receipt);
@@ -1687,6 +1691,237 @@ public class PlatformService {
         }
     }
 
+    private Map<String, Object> resolveCouponPreview(User user, BigDecimal investmentAmount, String couponCode, boolean previewOnly) {
+        if (isBlank(couponCode)) {
+            return couponPreview(null, null, BigDecimal.ZERO, true, "No coupon applied");
+        }
+
+        String normalizedCode = couponCode.trim().toUpperCase();
+        Coupon coupon = couponRepository.findByCodeIgnoreCase(normalizedCode).orElse(null);
+        if (coupon == null) {
+            return invalidCoupon(previewOnly, normalizedCode, "Coupon code not found");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        if (coupon.getStatus() != DomainEnums.CouponStatus.ACTIVE) {
+            return invalidCoupon(previewOnly, normalizedCode, "Coupon is not active");
+        }
+        if (coupon.getValidFrom() != null && coupon.getValidFrom().isAfter(now)) {
+            return invalidCoupon(previewOnly, normalizedCode, "Coupon is not valid yet");
+        }
+        if (coupon.getValidUntil() != null && coupon.getValidUntil().isBefore(now)) {
+            return invalidCoupon(previewOnly, normalizedCode, "Coupon has expired");
+        }
+        if (coupon.getMinimumInvestmentAmount() != null && investmentAmount.compareTo(coupon.getMinimumInvestmentAmount()) < 0) {
+            return invalidCoupon(previewOnly, normalizedCode, "Investment amount is below coupon minimum");
+        }
+        if (coupon.isFirstInvestmentOnly() && hasPriorInvestment(user.getId())) {
+            return invalidCoupon(previewOnly, normalizedCode, "Coupon is only for first investment");
+        }
+
+        List<DomainEnums.CouponRedemptionStatus> countedStatuses = List.of(
+                DomainEnums.CouponRedemptionStatus.RESERVED,
+                DomainEnums.CouponRedemptionStatus.CREDITED
+        );
+        if (coupon.getTotalUsageLimit() != null && coupon.getTotalUsageLimit() > 0
+                && couponRedemptionRepository.countByCouponIdAndStatusIn(coupon.getId(), countedStatuses) >= coupon.getTotalUsageLimit()) {
+            return invalidCoupon(previewOnly, normalizedCode, "Coupon usage limit reached");
+        }
+        if (coupon.getPerUserUsageLimit() != null && coupon.getPerUserUsageLimit() > 0
+                && couponRedemptionRepository.countByCouponIdAndUserIdAndStatusIn(coupon.getId(), user.getId(), countedStatuses) >= coupon.getPerUserUsageLimit()) {
+            return invalidCoupon(previewOnly, normalizedCode, "You have already used this coupon");
+        }
+
+        BigDecimal cashback = calculateCouponCashback(coupon, investmentAmount);
+        if (cashback.compareTo(BigDecimal.ZERO) <= 0) {
+            return invalidCoupon(previewOnly, normalizedCode, "Coupon has no cashback for this amount");
+        }
+
+        return couponPreview(coupon.getId(), coupon.getCode(), cashback, true, "Coupon applied");
+    }
+
+    private Map<String, Object> invalidCoupon(boolean previewOnly, String couponCode, String message) {
+        if (!previewOnly) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+        }
+        return couponPreview(null, couponCode, BigDecimal.ZERO, false, message);
+    }
+
+    private Map<String, Object> couponPreview(String couponId, String couponCode, BigDecimal cashbackAmount, boolean valid, String message) {
+        Map<String, Object> preview = new LinkedHashMap<>();
+        preview.put("couponId", couponId);
+        preview.put("couponCode", couponCode);
+        preview.put("cashbackAmount", cashbackAmount == null ? BigDecimal.ZERO : cashbackAmount);
+        preview.put("valid", valid);
+        preview.put("message", message);
+        return preview;
+    }
+
+    private BigDecimal calculateCouponCashback(Coupon coupon, BigDecimal investmentAmount) {
+        BigDecimal cashback;
+        if (coupon.getType() == DomainEnums.CouponType.PERCENT_CASHBACK) {
+            cashback = investmentAmount.multiply(coupon.getValueAmount()).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+        } else {
+            cashback = coupon.getValueAmount();
+        }
+        if (coupon.getMaximumCashbackAmount() != null && coupon.getMaximumCashbackAmount().compareTo(BigDecimal.ZERO) > 0
+                && cashback.compareTo(coupon.getMaximumCashbackAmount()) > 0) {
+            cashback = coupon.getMaximumCashbackAmount();
+        }
+        return cashback.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private boolean hasPriorInvestment(String userId) {
+        return investmentRepository.findByInvestorUserId(userId).stream()
+                .anyMatch(investment -> investment.getStatus() != DomainEnums.InvestmentStatus.CANCELLED
+                        && investment.getStatus() != DomainEnums.InvestmentStatus.REJECTED);
+    }
+
+    private void reserveCouponRedemption(User user, Investment investment, Map<String, Object> couponPreview) {
+        String couponId = (String) couponPreview.get("couponId");
+        if (isBlank(couponId)) {
+            return;
+        }
+
+        CouponRedemption redemption = new CouponRedemption();
+        redemption.setId(UUID.randomUUID().toString());
+        redemption.setCouponId(couponId);
+        redemption.setCouponCode((String) couponPreview.get("couponCode"));
+        redemption.setUserId(user.getId());
+        redemption.setInvestmentId(investment.getId());
+        redemption.setInvestmentAmount(investment.getInvestmentAmount());
+        redemption.setCashbackAmount((BigDecimal) couponPreview.get("cashbackAmount"));
+        redemption.setStatus(DomainEnums.CouponRedemptionStatus.RESERVED);
+        redemption.setRedeemedAt(LocalDateTime.now());
+        couponRedemptionRepository.save(redemption);
+    }
+
+    private void creditCouponCashback(Investment investment) {
+        if (investment.isCouponCredited() || investment.getCouponCashbackAmount() == null
+                || investment.getCouponCashbackAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        CouponRedemption redemption = couponRedemptionRepository.findByInvestmentId(investment.getId()).orElse(null);
+        if (redemption == null || redemption.getStatus() == DomainEnums.CouponRedemptionStatus.CREDITED) {
+            return;
+        }
+
+        Wallet wallet = getWalletByUserId(investment.getInvestorUserId());
+        creditWallet(wallet, investment.getInvestorUserId(), investment.getCouponCashbackAmount(),
+                DomainEnums.WalletTransactionType.COUPON_CASHBACK, redemption.getId(),
+                "Coupon cashback credited: " + investment.getAppliedCouponCode(), "SYSTEM");
+
+        redemption.setStatus(DomainEnums.CouponRedemptionStatus.CREDITED);
+        redemption.setCreditedAt(LocalDateTime.now());
+        couponRedemptionRepository.save(redemption);
+
+        investment.setCouponCredited(true);
+        investmentRepository.save(investment);
+        notifyUser(investment.getInvestorUserId(), "Coupon cashback credited",
+                investment.getCouponCashbackAmount() + " credited for coupon " + investment.getAppliedCouponCode(),
+                DomainEnums.NotificationType.INVESTMENT_UPDATE);
+    }
+
+    private void cancelCouponRedemption(String investmentId) {
+        couponRedemptionRepository.findByInvestmentId(investmentId)
+                .filter(redemption -> redemption.getStatus() == DomainEnums.CouponRedemptionStatus.RESERVED)
+                .ifPresent(redemption -> {
+                    redemption.setStatus(DomainEnums.CouponRedemptionStatus.CANCELLED);
+                    couponRedemptionRepository.save(redemption);
+                });
+    }
+
+    private Map<Integer, BigDecimal> getReferralRates() {
+        Map<Integer, BigDecimal> rates = new LinkedHashMap<>(REFERRAL_RATES);
+        for (int level = 1; level <= 5; level++) {
+            int referralLevel = level;
+            platformSettingRepository.findById("referral.rate.level" + referralLevel)
+                    .map(PlatformSetting::getSettingValue)
+                    .map(this::parsePositiveDecimal)
+                    .ifPresent(rate -> rates.put(referralLevel, rate));
+        }
+        return rates;
+    }
+
+    private BigDecimal parsePositiveDecimal(String value) {
+        try {
+            BigDecimal parsed = new BigDecimal(value);
+            return parsed.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : parsed;
+        } catch (RuntimeException ex) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+    private BigDecimal sanitizeReferralRate(BigDecimal rate, BigDecimal fallback) {
+        BigDecimal resolved = rate == null ? fallback : rate;
+        if (resolved == null || resolved.compareTo(BigDecimal.ZERO) < 0) {
+            return BigDecimal.ZERO;
+        }
+        if (resolved.compareTo(new BigDecimal("100")) > 0) {
+            return new BigDecimal("100");
+        }
+        return resolved;
+    }
+
+    private void upsertSetting(String key, String value, String updatedBy) {
+        PlatformSetting setting = platformSettingRepository.findById(key).orElseGet(PlatformSetting::new);
+        setting.setSettingKey(key);
+        setting.setSettingValue(value);
+        setting.setUpdatedAt(LocalDateTime.now());
+        setting.setUpdatedBy(updatedBy);
+        platformSettingRepository.save(setting);
+    }
+
+    private void applyCouponFields(Coupon coupon, String title, String description, String type, BigDecimal valueAmount,
+                                   BigDecimal minimumInvestmentAmount, BigDecimal maximumCashbackAmount,
+                                   Integer totalUsageLimit, Integer perUserUsageLimit, boolean firstInvestmentOnly,
+                                   String validFrom, String validUntil, String status, String adminId, boolean create) {
+        coupon.setTitle(title);
+        coupon.setDescription(description);
+        coupon.setType(resolveCouponType(type));
+        coupon.setValueAmount(valueAmount);
+        coupon.setMinimumInvestmentAmount(minimumInvestmentAmount == null ? BigDecimal.ZERO : minimumInvestmentAmount);
+        coupon.setMaximumCashbackAmount(maximumCashbackAmount);
+        coupon.setTotalUsageLimit(totalUsageLimit);
+        coupon.setPerUserUsageLimit(perUserUsageLimit == null || perUserUsageLimit <= 0 ? 1 : perUserUsageLimit);
+        coupon.setFirstInvestmentOnly(firstInvestmentOnly);
+        coupon.setStatus(resolveCouponStatus(status));
+        coupon.setValidFrom(parseDateTime(validFrom));
+        coupon.setValidUntil(parseDateTime(validUntil));
+        if (create) {
+            coupon.setCreatedByAdminId(adminId);
+            coupon.setCreatedAt(LocalDateTime.now());
+        }
+        coupon.setLastModifiedAt(LocalDateTime.now());
+        coupon.setLastModifiedBy(adminId);
+    }
+
+    private DomainEnums.CouponType resolveCouponType(String value) {
+        if (isBlank(value)) {
+            return DomainEnums.CouponType.FLAT_CASHBACK;
+        }
+        return DomainEnums.CouponType.valueOf(value.trim().toUpperCase());
+    }
+
+    private DomainEnums.CouponStatus resolveCouponStatus(String value) {
+        if (isBlank(value)) {
+            return DomainEnums.CouponStatus.ACTIVE;
+        }
+        return DomainEnums.CouponStatus.valueOf(value.trim().toUpperCase());
+    }
+
+    private LocalDateTime parseDateTime(String value) {
+        if (isBlank(value)) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(value.trim());
+        } catch (RuntimeException ignored) {
+            return LocalDate.parse(value.trim()).atStartOfDay();
+        }
+    }
+
     private DomainEnums.SupportTicketPriority resolveSupportPriority(String value) {
         if (isBlank(value)) {
             return DomainEnums.SupportTicketPriority.MEDIUM;
@@ -1829,6 +2064,11 @@ public class PlatformService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Plan not found"));
     }
 
+    private Coupon getCoupon(String id) {
+        return couponRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Coupon not found"));
+    }
+
     private Investment getInvestment(String id) {
         return investmentRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Investment not found"));
@@ -1860,6 +2100,7 @@ public class PlatformService {
         investment.setNotes(notes);
         Investment saved = investmentRepository.save(investment);
         processInvestmentActivationReferralCommissions(saved);
+        creditCouponCashback(saved);
         return saved;
     }
 
