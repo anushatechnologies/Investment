@@ -138,7 +138,52 @@ public final class ApiDtos {
     ) {
     }
 
-    public record ApplyInvestmentRequest(@NotBlank String investmentPlanId, @NotNull BigDecimal investmentAmount) {
+    public record ApplyInvestmentRequest(@NotBlank String investmentPlanId,
+                                         @NotNull BigDecimal investmentAmount,
+                                         String couponCode) {
+    }
+
+    public record CreateCouponRequest(
+            @NotBlank String code,
+            @NotBlank String title,
+            String description,
+            @NotBlank String type,
+            @NotNull BigDecimal valueAmount,
+            BigDecimal minimumInvestmentAmount,
+            BigDecimal maximumCashbackAmount,
+            Integer totalUsageLimit,
+            Integer perUserUsageLimit,
+            boolean firstInvestmentOnly,
+            String validFrom,
+            String validUntil,
+            String status
+    ) {
+    }
+
+    public record UpdateCouponRequest(
+            @NotBlank String title,
+            String description,
+            @NotBlank String type,
+            @NotNull BigDecimal valueAmount,
+            BigDecimal minimumInvestmentAmount,
+            BigDecimal maximumCashbackAmount,
+            Integer totalUsageLimit,
+            Integer perUserUsageLimit,
+            boolean firstInvestmentOnly,
+            String validFrom,
+            String validUntil,
+            String status
+    ) {
+    }
+
+    public record ValidateCouponRequest(String investmentPlanId, @NotNull BigDecimal investmentAmount, String couponCode) {
+    }
+
+    public record UpdateReferralSettingsRequest(BigDecimal level1Rate,
+                                                BigDecimal level2Rate,
+                                                BigDecimal level3Rate,
+                                                BigDecimal level4Rate,
+                                                BigDecimal level5Rate) {
     }
 
     public record VerifyRazorpayPaymentRequest(

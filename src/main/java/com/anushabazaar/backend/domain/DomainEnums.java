@@ -168,4 +168,21 @@ public final class DomainEnums {
         MEDIUM,
         HIGH
     }
+
+    public enum CouponType {
+        FLAT_CASHBACK,
+        PERCENT_CASHBACK
+    }
+
+    public enum CouponStatus {
+        ACTIVE,
+        INACTIVE,
+        EXPIRED
+    }
+
+    public enum CouponRedemptionStatus {
+        RESERVED,
+        CREDITED,
+        CANCELLED
+    }
 }

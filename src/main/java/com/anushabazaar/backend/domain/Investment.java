@@ -31,6 +31,9 @@ public class Investment {
     private String activatedByAdminId;
     private String notes;
     private boolean receiptApproved;
+    private String appliedCouponCode;
+    private java.math.BigDecimal couponCashbackAmount;
+    private boolean couponCredited;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -66,4 +69,10 @@ public class Investment {
     public void setNotes(String notes) { this.notes = notes; }
     public boolean isReceiptApproved() { return receiptApproved; }
     public void setReceiptApproved(boolean receiptApproved) { this.receiptApproved = receiptApproved; }
+    public String getAppliedCouponCode() { return appliedCouponCode; }
+    public void setAppliedCouponCode(String appliedCouponCode) { this.appliedCouponCode = appliedCouponCode; }
+    public java.math.BigDecimal getCouponCashbackAmount() { return couponCashbackAmount; }
+    public void setCouponCashbackAmount(java.math.BigDecimal couponCashbackAmount) { this.couponCashbackAmount = couponCashbackAmount; }
+    public boolean isCouponCredited() { return couponCredited; }
+    public void setCouponCredited(boolean couponCredited) { this.couponCredited = couponCredited; }
 }

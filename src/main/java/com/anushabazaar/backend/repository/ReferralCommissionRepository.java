@@ -7,4 +7,5 @@ import java.util.List;
 
 public interface ReferralCommissionRepository extends JpaRepository<ReferralCommission, String> {
     List<ReferralCommission> findByBeneficiaryUserIdOrderByCreditedAtDesc(String beneficiaryUserId);
+    boolean existsBySourceInvestmentIdAndCommissionMonth(String sourceInvestmentId, String commissionMonth);
 }

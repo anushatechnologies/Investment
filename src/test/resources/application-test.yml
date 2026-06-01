@@ -13,8 +13,8 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
   servlet:
     multipart:
-      max-file-size: 25MB
-      max-request-size: 35MB
+      max-file-size: 50MB
+      max-request-size: 60MB
 
 app:
   auth:

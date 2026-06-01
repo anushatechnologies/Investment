@@ -23,6 +23,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class PlatformService {
+    private static final String INVESTMENT_ACTIVATION_COMMISSION_MONTH = "INVESTMENT_ACTIVATION";
 
     private static final Map<Integer, BigDecimal> REFERRAL_RATES = Map.of(
             1, new BigDecimal("5"),
@@ -43,6 +44,9 @@ public class PlatformService {
     private final WithdrawalRequestRepository withdrawalRepository;
     private final ReferralRelationshipRepository referralRelationshipRepository;
     private final ReferralCommissionRepository referralCommissionRepository;
+    private final CouponRepository couponRepository;
+    private final CouponRedemptionRepository couponRedemptionRepository;
+    private final PlatformSettingRepository platformSettingRepository;
     private final InterestRecordRepository interestRecordRepository;
     private final NotificationRepository notificationRepository;
     private final SupportTicketRepository supportTicketRepository;
@@ -64,6 +68,9 @@ public class PlatformService {
                            WithdrawalRequestRepository withdrawalRepository,
                            ReferralRelationshipRepository referralRelationshipRepository,
                            ReferralCommissionRepository referralCommissionRepository,
+                           CouponRepository couponRepository,
+                           CouponRedemptionRepository couponRedemptionRepository,
+                           PlatformSettingRepository platformSettingRepository,
                            InterestRecordRepository interestRecordRepository,
                            NotificationRepository notificationRepository,
                            SupportTicketRepository supportTicketRepository,
@@ -84,6 +91,9 @@ public class PlatformService {
         this.withdrawalRepository = withdrawalRepository;
         this.referralRelationshipRepository = referralRelationshipRepository;
         this.referralCommissionRepository = referralCommissionRepository;
+        this.couponRepository = couponRepository;
+        this.couponRedemptionRepository = couponRedemptionRepository;
+        this.platformSettingRepository = platformSettingRepository;
         this.interestRecordRepository = interestRecordRepository;
         this.notificationRepository = notificationRepository;
         this.supportTicketRepository = supportTicketRepository;
@@ -511,6 +521,70 @@ public class PlatformService {
         return planRepository.findAll();
     }
 
+    public List<Coupon> getActiveCouponsForInvestor() {
+        LocalDateTime now = LocalDateTime.now();
+        return couponRepository.findByStatusAndValidUntilAfterOrderByCreatedAtDesc(DomainEnums.CouponStatus.ACTIVE, now).stream()
+                .filter(coupon -> coupon.getValidFrom() == null || !coupon.getValidFrom().isAfter(now))
+                .toList();
+    }
+
+    public List<Coupon> getAllCoupons() {
+        return couponRepository.findAll();
+    }
+
+    public Map<String, Object> getReferralSettings() {
+        Map<Integer, BigDecimal> rates = getReferralRates();
+        return Map.of(
+                "level1Rate", rates.getOrDefault(1, BigDecimal.ZERO),
+                "level2Rate", rates.getOrDefault(2, BigDecimal.ZERO),
+                "level3Rate", rates.getOrDefault(3, BigDecimal.ZERO),
+                "level4Rate", rates.getOrDefault(4, BigDecimal.ZERO),
+                "level5Rate", rates.getOrDefault(5, BigDecimal.ZERO)
+        );
+    }
+
+    @Transactional
+    public Coupon createCoupon(User admin, ApiDtos.CreateCouponRequest body, HttpServletRequest request) {
+        Coupon coupon = new Coupon();
+        coupon.setId(UUID.randomUUID().toString());
+        coupon.setCode(body.code().trim().toUpperCase());
+        if (couponRepository.findByCodeIgnoreCase(coupon.getCode()).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Coupon code already exists");
+        }
+        applyCouponFields(coupon, body.title(), body.description(), body.type(), body.valueAmount(), body.minimumInvestmentAmount(),
+                body.maximumCashbackAmount(), body.totalUsageLimit(), body.perUserUsageLimit(), body.firstInvestmentOnly(),
+                body.validFrom(), body.validUntil(), body.status(), admin.getId(), true);
+        Coupon saved = couponRepository.save(coupon);
+        auditService.log(admin, "COUPON_CREATED", "Coupon", saved.getId(), null, saved.getCode(), request);
+        return saved;
+    }
+
+    @Transactional
+    public Coupon updateCoupon(User admin, String couponId, ApiDtos.UpdateCouponRequest body, HttpServletRequest request) {
+        Coupon coupon = getCoupon(couponId);
+        applyCouponFields(coupon, coupon.getCode(), body.description(), body.type(), body.valueAmount(), body.minimumInvestmentAmount(),
+                body.maximumCashbackAmount(), body.totalUsageLimit(), body.perUserUsageLimit(), body.firstInvestmentOnly(),
+                body.validFrom(), body.validUntil(), body.status(), admin.getId(), false);
+        coupon.setTitle(body.title());
+        Coupon saved = couponRepository.save(coupon);
+        auditService.log(admin, "COUPON_UPDATED", "Coupon", saved.getId(), null, saved.getCode(), request);
+        return saved;
+    }
+
+    @Transactional
+    public Map<String, Object> updateReferralSettings(User admin, ApiDtos.UpdateReferralSettingsRequest body, HttpServletRequest request) {
+        Map<Integer, BigDecimal> nextRates = Map.of(
+                1, sanitizeReferralRate(body.level1Rate(), REFERRAL_RATES.get(1)),
+                2, sanitizeReferralRate(body.level2Rate(), REFERRAL_RATES.get(2)),
+                3, sanitizeReferralRate(body.level3Rate(), REFERRAL_RATES.get(3)),
+                4, sanitizeReferralRate(body.level4Rate(), REFERRAL_RATES.get(4)),
+                5, sanitizeReferralRate(body.level5Rate(), REFERRAL_RATES.get(5))
+        );
+        nextRates.forEach((level, rate) -> upsertSetting("referral.rate.level" + level, rate.toPlainString(), admin.getId()));
+        auditService.log(admin, "REFERRAL_SETTINGS_UPDATED", "PlatformSetting", "referral-rates", null, nextRates.toString(), request);
+        return getReferralSettings();
+    }
+
     @Transactional
     public InvestmentPlan createPlan(User admin, ApiDtos.CreatePlanRequest body, HttpServletRequest request) {
         InvestmentPlan plan = new InvestmentPlan();
@@ -569,6 +643,7 @@ public class PlatformService {
         if (body.investmentAmount().compareTo(plan.getMinimumAmount()) < 0 || body.investmentAmount().compareTo(plan.getMaximumAmount()) > 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investment amount is outside plan limits");
         }
+        Map<String, Object> couponPreview = resolveCouponPreview(user, body.investmentAmount(), body.couponCode(), false);
         Investment investment = new Investment();
         investment.setId(UUID.randomUUID().toString());
         investment.setInvestorUserId(user.getId());
@@ -580,7 +655,11 @@ public class PlatformService {
         investment.setTotalInterestEarned(BigDecimal.ZERO);
         investment.setTotalPrincipalReturned(BigDecimal.ZERO);
         investment.setReceiptApproved(false);
+        investment.setAppliedCouponCode((String) couponPreview.get("couponCode"));
+        investment.setCouponCashbackAmount((BigDecimal) couponPreview.get("cashbackAmount"));
+        investment.setCouponCredited(false);
         Investment saved = investmentRepository.save(investment);
+        reserveCouponRedemption(user, saved, couponPreview);
         notifyUser(user.getId(), "Investment applied", "Investment created. Upload payment receipt to continue.", DomainEnums.NotificationType.INVESTMENT_UPDATE);
         auditService.log(user, "INVESTMENT_APPLIED", "Investment", saved.getId(), null, body.investmentAmount().toPlainString(), request);
         return saved;
@@ -596,6 +675,7 @@ public class PlatformService {
         if (body.investmentAmount().compareTo(plan.getMinimumAmount()) < 0 || body.investmentAmount().compareTo(plan.getMaximumAmount()) > 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investment amount is outside plan limits");
         }
+        Map<String, Object> couponPreview = resolveCouponPreview(user, body.investmentAmount(), body.couponCode(), false);
 
         Investment investment = new Investment();
         investment.setId(UUID.randomUUID().toString());
@@ -608,6 +688,9 @@ public class PlatformService {
         investment.setTotalInterestEarned(BigDecimal.ZERO);
         investment.setTotalPrincipalReturned(BigDecimal.ZERO);
         investment.setReceiptApproved(false);
+        investment.setAppliedCouponCode((String) couponPreview.get("couponCode"));
+        investment.setCouponCashbackAmount((BigDecimal) couponPreview.get("cashbackAmount"));
+        investment.setCouponCredited(false);
 
         Map<String, Object> notes = new LinkedHashMap<>();
         notes.put("investmentId", investment.getId());
@@ -615,6 +698,7 @@ public class PlatformService {
         notes.put("planId", plan.getId());
         notes.put("email", user.getEmail());
         notes.put("mobileNumber", user.getMobileNumber());
+        notes.put("couponCode", investment.getAppliedCouponCode());
 
         String receipt = "inv_" + investment.getId().replace("-", "").substring(0, 20);
         Map<String, Object> razorpayOrder = razorpayGatewayService.createOrder(
@@ -625,6 +709,7 @@ public class PlatformService {
         );
 
         Investment savedInvestment = investmentRepository.save(investment);
+        reserveCouponRedemption(user, savedInvestment, couponPreview);
 
         RazorpayPayment razorpayPayment = new RazorpayPayment();
         razorpayPayment.setId(UUID.randomUUID().toString());
@@ -655,7 +740,9 @@ public class PlatformService {
                         "investorEmail", user.getEmail(),
                         "investorContact", user.getMobileNumber(),
                         "planName", plan.getPlanName(),
-                        "description", "Investment for " + plan.getPlanName()
+                        "description", "Investment for " + plan.getPlanName(),
+                        "couponCode", savedInvestment.getAppliedCouponCode(),
+                        "couponCashbackAmount", savedInvestment.getCouponCashbackAmount() == null ? BigDecimal.ZERO : savedInvestment.getCouponCashbackAmount()
                 )
         );
     }
@@ -804,14 +891,7 @@ public class PlatformService {
         if (!investment.isReceiptApproved()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Receipt is not approved");
         }
-        InvestmentPlan plan = getPlan(investment.getInvestmentPlanId());
-        investment.setStatus(DomainEnums.InvestmentStatus.ACTIVE);
-        investment.setActivatedAt(LocalDateTime.now());
-        investment.setActivatedByAdminId(admin.getId());
-        investment.setMaturityDate(LocalDate.now().plusMonths(plan.getLockInMonths()));
-        investment.setMonthlyInterestRate(plan.getMonthlyInterestRate());
-        investment.setNotes(body.notes());
-        Investment saved = investmentRepository.save(investment);
+        Investment saved = activateInvestmentRecord(investment, admin.getId(), body.notes());
         notifyUser(investment.getInvestorUserId(), "Investment activated", "Investment activated. Matures on " + saved.getMaturityDate(), DomainEnums.NotificationType.INVESTMENT_UPDATE);
         auditService.log(admin, "INVESTMENT_ACTIVATED", "Investment", investmentId, null, saved.getStatus().name(), request);
         return saved;
@@ -989,6 +1069,10 @@ public class PlatformService {
         return referralCommissionRepository.findByBeneficiaryUserIdOrderByCreditedAtDesc(user.getId());
     }
 
+    public Map<String, Object> validateCoupon(User user, ApiDtos.ValidateCouponRequest body) {
+        return resolveCouponPreview(user, body.investmentAmount(), body.couponCode(), true);
+    }
+
     public Map<String, Object> getAdminReferralReport() {
         List<ReferralRelationship> relationships = referralRelationshipRepository.findAll();
         List<ReferralCommission> commissions = referralCommissionRepository.findAll();
@@ -1005,7 +1089,7 @@ public class PlatformService {
                 .filter(commission -> commission.getStatus() == DomainEnums.CommissionStatus.SKIPPED)
                 .count();
 
-        List<Map<String, Object>> levelSummary = REFERRAL_RATES.entrySet().stream()
+        List<Map<String, Object>> levelSummary = getReferralRates().entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
                 .map(entry -> Map.<String, Object>of(
                         "level", entry.getKey(),
@@ -1525,7 +1609,7 @@ public class PlatformService {
             commission.setSourceInvestmentId(investment.getId());
             commission.setCommissionMonth(month);
             commission.setReferralLevel(relationship.getReferralLevel());
-            commission.setCommissionRate(REFERRAL_RATES.get(relationship.getReferralLevel()));
+            commission.setCommissionRate(getReferralRates().get(relationship.getReferralLevel()));
             commission.setSourceInterestAmount(interest);
             BigDecimal amount = interest.multiply(commission.getCommissionRate()).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
             commission.setCommissionAmount(amount);
@@ -1541,6 +1625,64 @@ public class PlatformService {
                 commission.setStatus(DomainEnums.CommissionStatus.SKIPPED);
                 commission.setSkipReason("Beneficiary inactive");
             }
+            referralCommissionRepository.save(commission);
+        }
+    }
+
+    private void processInvestmentActivationReferralCommissions(Investment investment) {
+        if (referralCommissionRepository.existsBySourceInvestmentIdAndCommissionMonth(
+                investment.getId(), INVESTMENT_ACTIVATION_COMMISSION_MONTH)) {
+            return;
+        }
+
+        List<ReferralRelationship> uplines = referralRelationshipRepository
+                .findByReferredUserIdOrderByReferralLevelAsc(investment.getInvestorUserId());
+        for (ReferralRelationship relationship : uplines) {
+            BigDecimal rate = getReferralRates().get(relationship.getReferralLevel());
+            if (rate == null) {
+                continue;
+            }
+
+            ReferralCommission commission = new ReferralCommission();
+            commission.setId(UUID.randomUUID().toString());
+            commission.setBeneficiaryUserId(relationship.getReferrerUserId());
+            commission.setSourceInvestorId(investment.getInvestorUserId());
+            commission.setSourceInvestmentId(investment.getId());
+            commission.setCommissionMonth(INVESTMENT_ACTIVATION_COMMISSION_MONTH);
+            commission.setReferralLevel(relationship.getReferralLevel());
+            commission.setCommissionRate(rate);
+            commission.setSourceInterestAmount(investment.getInvestmentAmount());
+
+            BigDecimal amount = investment.getInvestmentAmount()
+                    .multiply(rate)
+                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+            commission.setCommissionAmount(amount);
+
+            User beneficiary = getUser(relationship.getReferrerUserId());
+            if (beneficiary.getAccountStatus() == DomainEnums.AccountStatus.ACTIVE) {
+                commission.setStatus(DomainEnums.CommissionStatus.CREDITED);
+                commission.setCreditedAt(LocalDateTime.now());
+                Wallet wallet = getWalletByUserId(beneficiary.getId());
+                creditWallet(
+                        wallet,
+                        beneficiary.getId(),
+                        amount,
+                        DomainEnums.WalletTransactionType.REFERRAL_COMMISSION,
+                        commission.getId(),
+                        "Referral commission credited on investment activation",
+                        "SYSTEM"
+                );
+                notifyUser(
+                        beneficiary.getId(),
+                        "Referral commission credited",
+                        amount + " credited after your referral activated an investment.",
+                        DomainEnums.NotificationType.REFERRAL_COMMISSION
+                );
+            } else {
+                commission.setStatus(DomainEnums.CommissionStatus.SKIPPED);
+                commission.setSkipReason("Beneficiary inactive");
+            }
+
             referralCommissionRepository.save(commission);
         }
     }
@@ -1707,6 +1849,20 @@ public class PlatformService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Wallet not found"));
     }
 
+    private Investment activateInvestmentRecord(Investment investment, String activatedBy, String notes) {
+        InvestmentPlan plan = getPlan(investment.getInvestmentPlanId());
+        investment.setReceiptApproved(true);
+        investment.setStatus(DomainEnums.InvestmentStatus.ACTIVE);
+        investment.setActivatedAt(LocalDateTime.now());
+        investment.setActivatedByAdminId(activatedBy);
+        investment.setMaturityDate(LocalDate.now().plusMonths(plan.getLockInMonths()));
+        investment.setMonthlyInterestRate(plan.getMonthlyInterestRate());
+        investment.setNotes(notes);
+        Investment saved = investmentRepository.save(investment);
+        processInvestmentActivationReferralCommissions(saved);
+        return saved;
+    }
+
     private void notifyUser(String userId, String title, String message, DomainEnums.NotificationType type) {
         Notification notification = new Notification();
         notification.setId(UUID.randomUUID().toString());
@@ -1798,15 +1954,7 @@ public class PlatformService {
                                                    Map<String, Object> paymentPayload, String source) {
         applyPaymentSnapshot(razorpayPayment, paymentPayload);
         if (investment.getStatus() != DomainEnums.InvestmentStatus.ACTIVE) {
-            InvestmentPlan plan = getPlan(investment.getInvestmentPlanId());
-            investment.setReceiptApproved(true);
-            investment.setStatus(DomainEnums.InvestmentStatus.ACTIVE);
-            investment.setActivatedAt(LocalDateTime.now());
-            investment.setActivatedByAdminId(source);
-            investment.setMaturityDate(LocalDate.now().plusMonths(plan.getLockInMonths()));
-            investment.setMonthlyInterestRate(plan.getMonthlyInterestRate());
-            investment.setNotes("Activated via Razorpay " + source);
-            investmentRepository.save(investment);
+            activateInvestmentRecord(investment, source, "Activated via Razorpay " + source);
             notifyUser(investment.getInvestorUserId(), "Investment activated", "Payment captured successfully. Investment is active now.", DomainEnums.NotificationType.INVESTMENT_UPDATE);
         }
         razorpayPaymentRepository.save(razorpayPayment);

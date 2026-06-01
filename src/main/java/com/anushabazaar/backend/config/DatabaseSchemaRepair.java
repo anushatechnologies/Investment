@@ -51,6 +51,9 @@ public class DatabaseSchemaRepair {
         repairColumn("notification", "type");
         repairColumn("notification", "channel");
         repairColumn("audit_log", "actor_role");
+        repairColumn("coupon", "type");
+        repairColumn("coupon", "status");
+        repairColumn("coupon_redemption", "status");
     }
 
     private void repairColumn(String table, String column) {

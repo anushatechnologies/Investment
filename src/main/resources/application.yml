@@ -17,8 +17,8 @@ spring:
         format_sql: true
   servlet:
     multipart:
-      max-file-size: 25MB
-      max-request-size: 35MB
+      max-file-size: 50MB
+      max-request-size: 60MB
   mail:
     host: ${SPRING_MAIL_HOST:smtpout.secureserver.net}
     port: ${SPRING_MAIL_PORT:587}
