@@ -24,6 +24,19 @@ import java.util.stream.Collectors;
 @Service
 public class PlatformService {
     private static final String INVESTMENT_ACTIVATION_COMMISSION_MONTH = "INVESTMENT_ACTIVATION";
+    private static final String WITHDRAWAL_ENABLED_KEY = "withdrawal.enabled";
+    private static final String WITHDRAWAL_MIN_AMOUNT_KEY = "withdrawal.minimumAmount";
+    private static final String WITHDRAWAL_MAX_AMOUNT_KEY = "withdrawal.maximumAmount";
+    private static final String WITHDRAWAL_DAILY_LIMIT_KEY = "withdrawal.dailyLimit";
+    private static final String WITHDRAWAL_MONTHLY_LIMIT_KEY = "withdrawal.monthlyLimit";
+    private static final String WITHDRAWAL_ALERT_THRESHOLD_KEY = "withdrawal.largeAlertThreshold";
+    private static final String WITHDRAWAL_PROCESSING_TIME_KEY = "withdrawal.processingTime";
+    private static final String WITHDRAWAL_PREFERRED_METHOD_KEY = "withdrawal.preferredMethod";
+    private static final BigDecimal DEFAULT_WITHDRAWAL_MIN_AMOUNT = new BigDecimal("1000");
+    private static final BigDecimal DEFAULT_WITHDRAWAL_MAX_AMOUNT = BigDecimal.ZERO;
+    private static final BigDecimal DEFAULT_WITHDRAWAL_DAILY_LIMIT = BigDecimal.ZERO;
+    private static final BigDecimal DEFAULT_WITHDRAWAL_MONTHLY_LIMIT = BigDecimal.ZERO;
+    private static final BigDecimal DEFAULT_WITHDRAWAL_ALERT_THRESHOLD = new BigDecimal("50000");
 
     private static final Map<Integer, BigDecimal> REFERRAL_RATES = Map.of(
             1, new BigDecimal("5"),
@@ -557,6 +570,52 @@ public class PlatformService {
         );
     }
 
+    public Map<String, Object> getWithdrawalSettings() {
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("withdrawalEnabled", getBooleanSetting(WITHDRAWAL_ENABLED_KEY, true));
+        settings.put("minimumWithdrawalAmount", getDecimalSetting(WITHDRAWAL_MIN_AMOUNT_KEY, DEFAULT_WITHDRAWAL_MIN_AMOUNT));
+        settings.put("maximumWithdrawalAmount", getDecimalSetting(WITHDRAWAL_MAX_AMOUNT_KEY, DEFAULT_WITHDRAWAL_MAX_AMOUNT));
+        settings.put("dailyWithdrawalLimit", getDecimalSetting(WITHDRAWAL_DAILY_LIMIT_KEY, DEFAULT_WITHDRAWAL_DAILY_LIMIT));
+        settings.put("monthlyWithdrawalLimit", getDecimalSetting(WITHDRAWAL_MONTHLY_LIMIT_KEY, DEFAULT_WITHDRAWAL_MONTHLY_LIMIT));
+        settings.put("largeWithdrawalAlertThreshold", getDecimalSetting(WITHDRAWAL_ALERT_THRESHOLD_KEY, DEFAULT_WITHDRAWAL_ALERT_THRESHOLD));
+        settings.put("processingTime", getStringSetting(WITHDRAWAL_PROCESSING_TIME_KEY, "24 hours"));
+        settings.put("preferredMethod", getStringSetting(WITHDRAWAL_PREFERRED_METHOD_KEY, "Bank Transfer"));
+        return settings;
+    }
+
+    @Transactional
+    public Map<String, Object> updateWithdrawalSettings(User admin, ApiDtos.UpdateWithdrawalSettingsRequest body, HttpServletRequest request) {
+        Map<String, Object> current = getWithdrawalSettings();
+        BigDecimal minimum = sanitizeAmount(body.minimumWithdrawalAmount(), (BigDecimal) current.get("minimumWithdrawalAmount"));
+        BigDecimal maximum = sanitizeAmount(body.maximumWithdrawalAmount(), (BigDecimal) current.get("maximumWithdrawalAmount"));
+        BigDecimal dailyLimit = sanitizeAmount(body.dailyWithdrawalLimit(), (BigDecimal) current.get("dailyWithdrawalLimit"));
+        BigDecimal monthlyLimit = sanitizeAmount(body.monthlyWithdrawalLimit(), (BigDecimal) current.get("monthlyWithdrawalLimit"));
+        BigDecimal alertThreshold = sanitizeAmount(body.largeWithdrawalAlertThreshold(), (BigDecimal) current.get("largeWithdrawalAlertThreshold"));
+
+        if (maximum.compareTo(BigDecimal.ZERO) > 0 && maximum.compareTo(minimum) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Maximum withdrawal amount cannot be less than minimum withdrawal amount");
+        }
+        if (dailyLimit.compareTo(BigDecimal.ZERO) > 0 && dailyLimit.compareTo(minimum) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Daily withdrawal limit cannot be less than minimum withdrawal amount");
+        }
+        if (monthlyLimit.compareTo(BigDecimal.ZERO) > 0 && monthlyLimit.compareTo(minimum) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Monthly withdrawal limit cannot be less than minimum withdrawal amount");
+        }
+
+        boolean enabled = body.withdrawalEnabled() == null ? Boolean.TRUE.equals(current.get("withdrawalEnabled")) : body.withdrawalEnabled();
+        upsertSetting(WITHDRAWAL_ENABLED_KEY, Boolean.toString(enabled), admin.getId());
+        upsertSetting(WITHDRAWAL_MIN_AMOUNT_KEY, minimum.toPlainString(), admin.getId());
+        upsertSetting(WITHDRAWAL_MAX_AMOUNT_KEY, maximum.toPlainString(), admin.getId());
+        upsertSetting(WITHDRAWAL_DAILY_LIMIT_KEY, dailyLimit.toPlainString(), admin.getId());
+        upsertSetting(WITHDRAWAL_MONTHLY_LIMIT_KEY, monthlyLimit.toPlainString(), admin.getId());
+        upsertSetting(WITHDRAWAL_ALERT_THRESHOLD_KEY, alertThreshold.toPlainString(), admin.getId());
+        upsertSetting(WITHDRAWAL_PROCESSING_TIME_KEY, firstNonBlank(body.processingTime(), (String) current.get("processingTime")), admin.getId());
+        upsertSetting(WITHDRAWAL_PREFERRED_METHOD_KEY, firstNonBlank(body.preferredMethod(), (String) current.get("preferredMethod")), admin.getId());
+
+        auditService.log(admin, "WITHDRAWAL_SETTINGS_UPDATED", "PlatformSetting", "withdrawal-settings", null, getWithdrawalSettings().toString(), request);
+        return getWithdrawalSettings();
+    }
+
     @Transactional
     public Coupon createCoupon(User admin, ApiDtos.CreateCouponRequest body, HttpServletRequest request) {
         Coupon coupon = new Coupon();
@@ -933,10 +992,19 @@ public class PlatformService {
 
     public Map<String, Object> getWallet(User user) {
         Wallet wallet = getWalletByUserId(user.getId());
-        return Map.of(
-                "wallet", wallet,
-                "recentTransactions", walletTransactionRepository.findByUserIdOrderByCreatedAtDesc(user.getId()).stream().limit(10).toList()
-        );
+        Map<String, Object> withdrawalSettings = getWithdrawalSettings();
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("wallet", wallet);
+        response.put("recentTransactions", walletTransactionRepository.findByUserIdOrderByCreatedAtDesc(user.getId()).stream().limit(10).toList());
+        response.put("withdrawalSettings", withdrawalSettings);
+        response.put("minWithdrawal", withdrawalSettings.get("minimumWithdrawalAmount"));
+        response.put("maxWithdrawal", withdrawalSettings.get("maximumWithdrawalAmount"));
+        response.put("dailyWithdrawalLimit", withdrawalSettings.get("dailyWithdrawalLimit"));
+        response.put("monthlyWithdrawalLimit", withdrawalSettings.get("monthlyWithdrawalLimit"));
+        response.put("withdrawalEnabled", withdrawalSettings.get("withdrawalEnabled"));
+        response.put("processingTime", withdrawalSettings.get("processingTime"));
+        response.put("preferredMethod", withdrawalSettings.get("preferredMethod"));
+        return response;
     }
 
     public List<WalletTransaction> getWalletTransactions(User user) {
@@ -946,22 +1014,38 @@ public class PlatformService {
     @Transactional
     public WithdrawalRequest requestWithdrawal(User user, ApiDtos.RequestWithdrawalRequest body, HttpServletRequest request) {
         Wallet wallet = getWalletByUserId(user.getId());
-        if (body.requestedAmount().compareTo(new BigDecimal("1000")) < 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Minimum withdrawal is 1000");
+        Map<String, Object> settings = getWithdrawalSettings();
+        BigDecimal requestedAmount = body.requestedAmount();
+        BigDecimal minimumAmount = (BigDecimal) settings.get("minimumWithdrawalAmount");
+        BigDecimal maximumAmount = (BigDecimal) settings.get("maximumWithdrawalAmount");
+        BigDecimal dailyLimit = (BigDecimal) settings.get("dailyWithdrawalLimit");
+        BigDecimal monthlyLimit = (BigDecimal) settings.get("monthlyWithdrawalLimit");
+        BigDecimal alertThreshold = (BigDecimal) settings.get("largeWithdrawalAlertThreshold");
+
+        if (!Boolean.TRUE.equals(settings.get("withdrawalEnabled"))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Withdrawals are currently disabled");
         }
-        if (wallet.getAvailableBalance().compareTo(body.requestedAmount()) < 0) {
+        if (requestedAmount.compareTo(minimumAmount) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Minimum withdrawal is " + minimumAmount);
+        }
+        if (maximumAmount.compareTo(BigDecimal.ZERO) > 0 && requestedAmount.compareTo(maximumAmount) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Maximum withdrawal per request is " + maximumAmount);
+        }
+        enforceWithdrawalRollingLimits(user, requestedAmount, dailyLimit, monthlyLimit);
+
+        if (wallet.getAvailableBalance().compareTo(requestedAmount) < 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient wallet balance");
         }
-        wallet.setAvailableBalance(wallet.getAvailableBalance().subtract(body.requestedAmount()));
-        wallet.setLockedBalance(wallet.getLockedBalance().add(body.requestedAmount()));
+        wallet.setAvailableBalance(wallet.getAvailableBalance().subtract(requestedAmount));
+        wallet.setLockedBalance(wallet.getLockedBalance().add(requestedAmount));
         wallet.setLastUpdatedAt(LocalDateTime.now());
         walletRepository.save(wallet);
 
         WithdrawalRequest withdrawal = new WithdrawalRequest();
         withdrawal.setId(UUID.randomUUID().toString());
         withdrawal.setInvestorId(user.getId());
-        withdrawal.setRequestedAmount(body.requestedAmount());
-        withdrawal.setWalletBalanceAtRequest(wallet.getAvailableBalance().add(body.requestedAmount()));
+        withdrawal.setRequestedAmount(requestedAmount);
+        withdrawal.setWalletBalanceAtRequest(wallet.getAvailableBalance().add(requestedAmount));
         withdrawal.setBankAccountNumber(user.getBankAccountNumber());
         withdrawal.setBankIfsc(user.getBankIfscCode());
         withdrawal.setBankName(user.getBankName());
@@ -970,8 +1054,8 @@ public class PlatformService {
         withdrawal.setRequestedAt(LocalDateTime.now());
         WithdrawalRequest saved = withdrawalRepository.save(withdrawal);
 
-        if (body.requestedAmount().compareTo(new BigDecimal("50000")) > 0) {
-            createFraudAlert(user.getId(), DomainEnums.AlertLevel.MEDIUM, "LARGE_WITHDRAWAL", "Withdrawal request exceeds 50000");
+        if (alertThreshold.compareTo(BigDecimal.ZERO) > 0 && requestedAmount.compareTo(alertThreshold) > 0) {
+            createFraudAlert(user.getId(), DomainEnums.AlertLevel.MEDIUM, "LARGE_WITHDRAWAL", "Withdrawal request exceeds " + alertThreshold);
         }
         notifyUser(user.getId(), "Withdrawal requested", "Your withdrawal request is pending admin approval.", DomainEnums.NotificationType.WITHDRAWAL_UPDATE);
         auditService.log(user, "WITHDRAWAL_REQUESTED", "WithdrawalRequest", saved.getId(), null, saved.getRequestedAmount().toPlainString(), request);
@@ -980,6 +1064,42 @@ public class PlatformService {
 
     public List<WithdrawalRequest> getOwnWithdrawals(User user) {
         return withdrawalRepository.findByInvestorIdOrderByRequestedAtDesc(user.getId());
+    }
+
+    private void enforceWithdrawalRollingLimits(User user, BigDecimal requestedAmount, BigDecimal dailyLimit, BigDecimal monthlyLimit) {
+        if ((dailyLimit == null || dailyLimit.compareTo(BigDecimal.ZERO) <= 0)
+                && (monthlyLimit == null || monthlyLimit.compareTo(BigDecimal.ZERO) <= 0)) {
+            return;
+        }
+        LocalDate today = LocalDate.now();
+        YearMonth currentMonth = YearMonth.from(today);
+        List<WithdrawalRequest> withdrawals = withdrawalRepository.findByInvestorIdOrderByRequestedAtDesc(user.getId()).stream()
+                .filter(this::isCountedWithdrawalForLimit)
+                .toList();
+
+        if (dailyLimit != null && dailyLimit.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal dailyUsed = withdrawals.stream()
+                    .filter(withdrawal -> withdrawal.getRequestedAt() != null && withdrawal.getRequestedAt().toLocalDate().equals(today))
+                    .map(WithdrawalRequest::getRequestedAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (dailyUsed.add(requestedAmount).compareTo(dailyLimit) > 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Daily withdrawal limit exceeded. Limit is " + dailyLimit);
+            }
+        }
+
+        if (monthlyLimit != null && monthlyLimit.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal monthlyUsed = withdrawals.stream()
+                    .filter(withdrawal -> withdrawal.getRequestedAt() != null && YearMonth.from(withdrawal.getRequestedAt()).equals(currentMonth))
+                    .map(WithdrawalRequest::getRequestedAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (monthlyUsed.add(requestedAmount).compareTo(monthlyLimit) > 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Monthly withdrawal limit exceeded. Limit is " + monthlyLimit);
+            }
+        }
+    }
+
+    private boolean isCountedWithdrawalForLimit(WithdrawalRequest withdrawal) {
+        return withdrawal.getStatus() != DomainEnums.WithdrawalStatus.REJECTED;
     }
 
     public List<WithdrawalRequest> getPendingWithdrawals() {
@@ -1864,6 +1984,35 @@ public class PlatformService {
         } catch (RuntimeException ex) {
             return BigDecimal.ZERO;
         }
+    }
+
+    private BigDecimal getDecimalSetting(String key, BigDecimal fallback) {
+        return platformSettingRepository.findById(key)
+                .map(PlatformSetting::getSettingValue)
+                .map(this::parsePositiveDecimal)
+                .orElse(fallback);
+    }
+
+    private boolean getBooleanSetting(String key, boolean fallback) {
+        return platformSettingRepository.findById(key)
+                .map(PlatformSetting::getSettingValue)
+                .map(Boolean::parseBoolean)
+                .orElse(fallback);
+    }
+
+    private String getStringSetting(String key, String fallback) {
+        return platformSettingRepository.findById(key)
+                .map(PlatformSetting::getSettingValue)
+                .filter(value -> !isBlank(value))
+                .orElse(fallback);
+    }
+
+    private BigDecimal sanitizeAmount(BigDecimal amount, BigDecimal fallback) {
+        BigDecimal resolved = amount == null ? fallback : amount;
+        if (resolved == null || resolved.compareTo(BigDecimal.ZERO) < 0) {
+            return BigDecimal.ZERO;
+        }
+        return resolved.setScale(2, RoundingMode.HALF_UP);
     }
 
     private BigDecimal sanitizeReferralRate(BigDecimal rate, BigDecimal fallback) {

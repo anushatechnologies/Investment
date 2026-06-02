@@ -206,6 +206,16 @@ public final class ApiDtos {
     public record RequestWithdrawalRequest(@NotNull BigDecimal requestedAmount) {
     }
 
+    public record UpdateWithdrawalSettingsRequest(Boolean withdrawalEnabled,
+                                                  BigDecimal minimumWithdrawalAmount,
+                                                  BigDecimal maximumWithdrawalAmount,
+                                                  BigDecimal dailyWithdrawalLimit,
+                                                  BigDecimal monthlyWithdrawalLimit,
+                                                  BigDecimal largeWithdrawalAlertThreshold,
+                                                  String processingTime,
+                                                  String preferredMethod) {
+    }
+
     public record WithdrawalDecisionRequest(String reason, String adminNotes) {
     }
 
