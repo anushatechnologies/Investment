@@ -660,6 +660,7 @@ public class PlatformService {
 
     @Transactional
     public InvestmentPlan createPlan(User admin, ApiDtos.CreatePlanRequest body, HttpServletRequest request) {
+        validatePlanValues(body.minimumAmount(), body.maximumAmount(), body.lockInMonths(), body.monthlyInterestRate());
         InvestmentPlan plan = new InvestmentPlan();
         plan.setId(UUID.randomUUID().toString());
         plan.setPlanName(body.planName());
@@ -680,6 +681,7 @@ public class PlatformService {
 
     @Transactional
     public InvestmentPlan updatePlan(User admin, String id, ApiDtos.UpdatePlanRequest body, HttpServletRequest request) {
+        validatePlanValues(body.minimumAmount(), body.maximumAmount(), body.lockInMonths(), body.monthlyInterestRate());
         InvestmentPlan plan = getPlan(id);
         plan.setPlanName(body.planName());
         plan.setDescription(body.description());
@@ -2024,6 +2026,21 @@ public class PlatformService {
             return new BigDecimal("100");
         }
         return resolved;
+    }
+
+    private void validatePlanValues(BigDecimal minimumAmount, BigDecimal maximumAmount, Integer lockInMonths, BigDecimal monthlyInterestRate) {
+        if (minimumAmount == null || minimumAmount.compareTo(BigDecimal.ONE) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Minimum investment must be at least 1");
+        }
+        if (maximumAmount == null || maximumAmount.compareTo(minimumAmount) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Maximum investment must be greater than or equal to minimum investment");
+        }
+        if (lockInMonths == null || lockInMonths < 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Lock-in months must be at least 1");
+        }
+        if (monthlyInterestRate == null || monthlyInterestRate.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Monthly interest rate cannot be negative");
+        }
     }
 
     private void upsertSetting(String key, String value, String updatedBy) {

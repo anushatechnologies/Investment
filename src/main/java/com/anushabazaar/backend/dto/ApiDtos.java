@@ -120,7 +120,7 @@ public final class ApiDtos {
     public record CreatePlanRequest(
             @NotBlank String planName,
             @NotBlank String description,
-            @NotNull @DecimalMin("5000") BigDecimal minimumAmount,
+            @NotNull @DecimalMin(value = "1", message = "must be greater than or equal to 1") BigDecimal minimumAmount,
             @NotNull BigDecimal maximumAmount,
             @NotNull Integer lockInMonths,
             @NotNull BigDecimal monthlyInterestRate
@@ -130,7 +130,7 @@ public final class ApiDtos {
     public record UpdatePlanRequest(
             @NotBlank String planName,
             @NotBlank String description,
-            @NotNull @DecimalMin("5000") BigDecimal minimumAmount,
+            @NotNull @DecimalMin(value = "1", message = "must be greater than or equal to 1") BigDecimal minimumAmount,
             @NotNull BigDecimal maximumAmount,
             @NotNull Integer lockInMonths,
             @NotNull BigDecimal monthlyInterestRate,
