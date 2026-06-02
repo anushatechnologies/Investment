@@ -1,5 +1,7 @@
 package com.anushabazaar.backend;
 
+import com.anushabazaar.backend.domain.Investment;
+import com.anushabazaar.backend.repository.InvestmentRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -40,6 +42,9 @@ class AnushaBazaarBackendApplicationTests {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private InvestmentRepository investmentRepository;
 
     @Test
     void corsPreflightAllowsProductionFrontend() throws Exception {
@@ -313,6 +318,10 @@ class AnushaBazaarBackendApplicationTests {
                         .content(json(Map.of("notes", "activated in integration test"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ACTIVE"));
+
+        Investment activatedInvestment = investmentRepository.findById(investmentId).orElseThrow();
+        activatedInvestment.setNextInterestDueDate(LocalDate.now());
+        investmentRepository.save(activatedInvestment);
 
         mockMvc.perform(post("/api/admin/interest/trigger").header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())

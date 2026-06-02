@@ -80,6 +80,8 @@ public final class DomainEnums {
     public enum WalletTransactionType {
         INTEREST_CREDIT,
         REFERRAL_COMMISSION,
+        REFERRAL_INSTANT_CASHBACK,
+        REFERRAL_MONTHLY_INCOME,
         WITHDRAWAL_DEBIT,
         INVESTMENT_CREDIT,
         COUPON_CASHBACK,
@@ -140,6 +142,11 @@ public final class DomainEnums {
         CALCULATED,
         CREDITED,
         SKIPPED
+    }
+
+    public enum ReferralCommissionType {
+        INSTANT_CASHBACK,
+        MONTHLY_INTEREST_SHARE
     }
 
     public enum InterestStatus {

@@ -21,6 +21,8 @@ public class Investment {
     private DomainEnums.InvestmentStatus status;
     private LocalDateTime appliedAt;
     private LocalDateTime activatedAt;
+    private LocalDate nextInterestDueDate;
+    private LocalDateTime lastInterestCreditedAt;
     private LocalDate maturityDate;
     private BigDecimal monthlyInterestRate;
     private BigDecimal totalInterestEarned;
@@ -49,6 +51,10 @@ public class Investment {
     public void setAppliedAt(LocalDateTime appliedAt) { this.appliedAt = appliedAt; }
     public LocalDateTime getActivatedAt() { return activatedAt; }
     public void setActivatedAt(LocalDateTime activatedAt) { this.activatedAt = activatedAt; }
+    public LocalDate getNextInterestDueDate() { return nextInterestDueDate; }
+    public void setNextInterestDueDate(LocalDate nextInterestDueDate) { this.nextInterestDueDate = nextInterestDueDate; }
+    public LocalDateTime getLastInterestCreditedAt() { return lastInterestCreditedAt; }
+    public void setLastInterestCreditedAt(LocalDateTime lastInterestCreditedAt) { this.lastInterestCreditedAt = lastInterestCreditedAt; }
     public LocalDate getMaturityDate() { return maturityDate; }
     public void setMaturityDate(LocalDate maturityDate) { this.maturityDate = maturityDate; }
     public BigDecimal getMonthlyInterestRate() { return monthlyInterestRate; }

@@ -45,6 +45,7 @@ public class DatabaseSchemaRepair {
         repairColumn("wallet_transaction", "direction");
         repairColumn("withdrawal_request", "status");
         repairColumn("referral_commission", "status");
+        repairColumn("referral_commission", "commission_type");
         repairColumn("interest_record", "status");
         repairColumn("fraud_alert", "alert_level");
         repairColumn("fraud_alert", "status");

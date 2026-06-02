@@ -180,10 +180,20 @@ public final class ApiDtos {
     }
 
     public record UpdateReferralSettingsRequest(BigDecimal level1Rate,
-                                                BigDecimal level2Rate,
-                                                BigDecimal level3Rate,
-                                                BigDecimal level4Rate,
-                                                BigDecimal level5Rate) {
+                                                 BigDecimal level2Rate,
+                                                 BigDecimal level3Rate,
+                                                 BigDecimal level4Rate,
+                                                 BigDecimal level5Rate,
+                                                 BigDecimal level1InstantRate,
+                                                 BigDecimal level2InstantRate,
+                                                 BigDecimal level3InstantRate,
+                                                 BigDecimal level4InstantRate,
+                                                 BigDecimal level5InstantRate,
+                                                 BigDecimal level1MonthlyRate,
+                                                 BigDecimal level2MonthlyRate,
+                                                 BigDecimal level3MonthlyRate,
+                                                 BigDecimal level4MonthlyRate,
+                                                 BigDecimal level5MonthlyRate) {
     }
 
     public record VerifyRazorpayPaymentRequest(

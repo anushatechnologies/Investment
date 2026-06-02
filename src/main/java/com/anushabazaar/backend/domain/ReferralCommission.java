@@ -17,6 +17,8 @@ public class ReferralCommission {
     private String sourceInvestorId;
     private String sourceInvestmentId;
     private String commissionMonth;
+    @Enumerated(EnumType.STRING)
+    private DomainEnums.ReferralCommissionType commissionType;
     private Integer referralLevel;
     private BigDecimal commissionRate;
     private BigDecimal sourceInterestAmount;
@@ -36,6 +38,8 @@ public class ReferralCommission {
     public void setSourceInvestmentId(String sourceInvestmentId) { this.sourceInvestmentId = sourceInvestmentId; }
     public String getCommissionMonth() { return commissionMonth; }
     public void setCommissionMonth(String commissionMonth) { this.commissionMonth = commissionMonth; }
+    public DomainEnums.ReferralCommissionType getCommissionType() { return commissionType; }
+    public void setCommissionType(DomainEnums.ReferralCommissionType commissionType) { this.commissionType = commissionType; }
     public Integer getReferralLevel() { return referralLevel; }
     public void setReferralLevel(Integer referralLevel) { this.referralLevel = referralLevel; }
     public BigDecimal getCommissionRate() { return commissionRate; }

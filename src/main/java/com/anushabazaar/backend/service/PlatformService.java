@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 @Service
 public class PlatformService {
     private static final String INVESTMENT_ACTIVATION_COMMISSION_MONTH = "INVESTMENT_ACTIVATION";
+    private static final int MAX_REFERRAL_LEVEL = 5;
     private static final String WITHDRAWAL_ENABLED_KEY = "withdrawal.enabled";
     private static final String WITHDRAWAL_MIN_AMOUNT_KEY = "withdrawal.minimumAmount";
     private static final String WITHDRAWAL_MAX_AMOUNT_KEY = "withdrawal.maximumAmount";
@@ -38,12 +39,19 @@ public class PlatformService {
     private static final BigDecimal DEFAULT_WITHDRAWAL_MONTHLY_LIMIT = BigDecimal.ZERO;
     private static final BigDecimal DEFAULT_WITHDRAWAL_ALERT_THRESHOLD = new BigDecimal("50000");
 
-    private static final Map<Integer, BigDecimal> REFERRAL_RATES = Map.of(
+    private static final Map<Integer, BigDecimal> DEFAULT_INSTANT_REFERRAL_RATES = Map.of(
             1, new BigDecimal("5"),
             2, new BigDecimal("4"),
             3, new BigDecimal("3"),
             4, new BigDecimal("2"),
             5, new BigDecimal("1")
+    );
+    private static final Map<Integer, BigDecimal> DEFAULT_MONTHLY_REFERRAL_RATES = Map.of(
+            1, new BigDecimal("1"),
+            2, BigDecimal.ZERO,
+            3, BigDecimal.ZERO,
+            4, BigDecimal.ZERO,
+            5, BigDecimal.ZERO
     );
 
     private final UserRepository userRepository;
@@ -560,14 +568,16 @@ public class PlatformService {
     }
 
     public Map<String, Object> getReferralSettings() {
-        Map<Integer, BigDecimal> rates = getReferralRates();
-        return Map.of(
-                "level1Rate", rates.getOrDefault(1, BigDecimal.ZERO),
-                "level2Rate", rates.getOrDefault(2, BigDecimal.ZERO),
-                "level3Rate", rates.getOrDefault(3, BigDecimal.ZERO),
-                "level4Rate", rates.getOrDefault(4, BigDecimal.ZERO),
-                "level5Rate", rates.getOrDefault(5, BigDecimal.ZERO)
-        );
+        Map<Integer, BigDecimal> instantRates = getInstantReferralRates();
+        Map<Integer, BigDecimal> monthlyRates = getMonthlyReferralRates();
+        Map<String, Object> settings = new LinkedHashMap<>();
+        for (int level = 1; level <= MAX_REFERRAL_LEVEL; level++) {
+            BigDecimal instantRate = instantRates.getOrDefault(level, BigDecimal.ZERO);
+            settings.put("level" + level + "Rate", instantRate);
+            settings.put("level" + level + "InstantRate", instantRate);
+            settings.put("level" + level + "MonthlyRate", monthlyRates.getOrDefault(level, BigDecimal.ZERO));
+        }
+        return settings;
     }
 
     public Map<String, Object> getWithdrawalSettings() {
@@ -646,15 +656,27 @@ public class PlatformService {
 
     @Transactional
     public Map<String, Object> updateReferralSettings(User admin, ApiDtos.UpdateReferralSettingsRequest body, HttpServletRequest request) {
-        Map<Integer, BigDecimal> nextRates = Map.of(
-                1, sanitizeReferralRate(body.level1Rate(), REFERRAL_RATES.get(1)),
-                2, sanitizeReferralRate(body.level2Rate(), REFERRAL_RATES.get(2)),
-                3, sanitizeReferralRate(body.level3Rate(), REFERRAL_RATES.get(3)),
-                4, sanitizeReferralRate(body.level4Rate(), REFERRAL_RATES.get(4)),
-                5, sanitizeReferralRate(body.level5Rate(), REFERRAL_RATES.get(5))
+        Map<Integer, BigDecimal> nextInstantRates = Map.of(
+                1, sanitizeReferralRate(firstNonNull(body.level1InstantRate(), body.level1Rate()), DEFAULT_INSTANT_REFERRAL_RATES.get(1)),
+                2, sanitizeReferralRate(firstNonNull(body.level2InstantRate(), body.level2Rate()), DEFAULT_INSTANT_REFERRAL_RATES.get(2)),
+                3, sanitizeReferralRate(firstNonNull(body.level3InstantRate(), body.level3Rate()), DEFAULT_INSTANT_REFERRAL_RATES.get(3)),
+                4, sanitizeReferralRate(firstNonNull(body.level4InstantRate(), body.level4Rate()), DEFAULT_INSTANT_REFERRAL_RATES.get(4)),
+                5, sanitizeReferralRate(firstNonNull(body.level5InstantRate(), body.level5Rate()), DEFAULT_INSTANT_REFERRAL_RATES.get(5))
         );
-        nextRates.forEach((level, rate) -> upsertSetting("referral.rate.level" + level, rate.toPlainString(), admin.getId()));
-        auditService.log(admin, "REFERRAL_SETTINGS_UPDATED", "PlatformSetting", "referral-rates", null, nextRates.toString(), request);
+        Map<Integer, BigDecimal> nextMonthlyRates = Map.of(
+                1, sanitizeReferralRate(body.level1MonthlyRate(), DEFAULT_MONTHLY_REFERRAL_RATES.get(1)),
+                2, sanitizeReferralRate(body.level2MonthlyRate(), DEFAULT_MONTHLY_REFERRAL_RATES.get(2)),
+                3, sanitizeReferralRate(body.level3MonthlyRate(), DEFAULT_MONTHLY_REFERRAL_RATES.get(3)),
+                4, sanitizeReferralRate(body.level4MonthlyRate(), DEFAULT_MONTHLY_REFERRAL_RATES.get(4)),
+                5, sanitizeReferralRate(body.level5MonthlyRate(), DEFAULT_MONTHLY_REFERRAL_RATES.get(5))
+        );
+        nextInstantRates.forEach((level, rate) -> {
+            upsertSetting("referral.instant.level" + level, rate.toPlainString(), admin.getId());
+            upsertSetting("referral.rate.level" + level, rate.toPlainString(), admin.getId());
+        });
+        nextMonthlyRates.forEach((level, rate) -> upsertSetting("referral.monthly.level" + level, rate.toPlainString(), admin.getId()));
+        auditService.log(admin, "REFERRAL_SETTINGS_UPDATED", "PlatformSetting", "referral-rates", null,
+                Map.of("instant", nextInstantRates, "monthly", nextMonthlyRates).toString(), request);
         return getReferralSettings();
     }
 
@@ -1224,21 +1246,49 @@ public class PlatformService {
                 .filter(commission -> commission.getStatus() == DomainEnums.CommissionStatus.CREDITED)
                 .map(ReferralCommission::getCommissionAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal instantCashbackPaid = commissions.stream()
+                .filter(commission -> commission.getStatus() == DomainEnums.CommissionStatus.CREDITED)
+                .filter(commission -> commission.getCommissionType() == DomainEnums.ReferralCommissionType.INSTANT_CASHBACK)
+                .map(ReferralCommission::getCommissionAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal monthlyReferralIncomePaid = commissions.stream()
+                .filter(commission -> commission.getStatus() == DomainEnums.CommissionStatus.CREDITED)
+                .filter(commission -> commission.getCommissionType() == DomainEnums.ReferralCommissionType.MONTHLY_INTEREST_SHARE)
+                .map(ReferralCommission::getCommissionAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         long skippedCommissions = commissions.stream()
                 .filter(commission -> commission.getStatus() == DomainEnums.CommissionStatus.SKIPPED)
                 .count();
 
-        List<Map<String, Object>> levelSummary = getReferralRates().entrySet().stream()
+        Map<Integer, BigDecimal> instantRates = getInstantReferralRates();
+        Map<Integer, BigDecimal> monthlyRates = getMonthlyReferralRates();
+        List<Map<String, Object>> levelSummary = instantRates.entrySet().stream()
                 .sorted(Map.Entry.comparingByKey())
-                .map(entry -> Map.<String, Object>of(
-                        "level", entry.getKey(),
-                        "rate", entry.getValue(),
-                        "relationships", relationships.stream().filter(rel -> entry.getKey().equals(rel.getReferralLevel())).count(),
-                        "commissionAmount", commissions.stream()
+                .map(entry -> {
+                    Integer level = entry.getKey();
+                    BigDecimal instantAmount = commissions.stream()
+                            .filter(commission -> level.equals(commission.getReferralLevel()))
+                            .filter(commission -> commission.getCommissionType() == DomainEnums.ReferralCommissionType.INSTANT_CASHBACK)
+                            .map(ReferralCommission::getCommissionAmount)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    BigDecimal monthlyAmount = commissions.stream()
+                            .filter(commission -> level.equals(commission.getReferralLevel()))
+                            .filter(commission -> commission.getCommissionType() == DomainEnums.ReferralCommissionType.MONTHLY_INTEREST_SHARE)
+                            .map(ReferralCommission::getCommissionAmount)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    return Map.<String, Object>of(
+                            "level", level,
+                            "instantRate", entry.getValue(),
+                            "monthlyRate", monthlyRates.getOrDefault(level, BigDecimal.ZERO),
+                            "relationships", relationships.stream().filter(rel -> level.equals(rel.getReferralLevel())).count(),
+                            "instantCashbackAmount", instantAmount,
+                            "monthlyIncomeAmount", monthlyAmount,
+                            "commissionAmount", commissions.stream()
                                 .filter(commission -> entry.getKey().equals(commission.getReferralLevel()))
                                 .map(ReferralCommission::getCommissionAmount)
                                 .reduce(BigDecimal.ZERO, BigDecimal::add)
-                ))
+                    );
+                })
                 .toList();
 
         Map<String, BigDecimal> commissionByBeneficiary = commissions.stream()
@@ -1293,6 +1343,8 @@ public class PlatformService {
                 "totalRelationships", relationships.size(),
                 "totalCommissions", totalCommissions,
                 "creditedCommissions", creditedCommissions,
+                "instantCashbackPaid", instantCashbackPaid,
+                "monthlyReferralIncomePaid", monthlyReferralIncomePaid,
                 "skippedCommissions", skippedCommissions,
                 "levelSummary", levelSummary,
                 "topReferrers", topReferrers,
@@ -1319,39 +1371,53 @@ public class PlatformService {
 
     @Transactional
     public Map<String, Object> triggerInterestRun(User admin, HttpServletRequest request) {
-        String month = YearMonth.now().toString();
+        LocalDate today = LocalDate.now();
         int processed = 0;
         for (Investment investment : investmentRepository.findByStatus(DomainEnums.InvestmentStatus.ACTIVE)) {
-            if (interestRecordRepository.existsByInvestmentIdAndCalculationMonth(investment.getId(), month)) {
-                continue;
-            }
-            BigDecimal interest = investment.getInvestmentAmount()
-                    .multiply(investment.getMonthlyInterestRate())
-                    .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-            InterestRecord record = new InterestRecord();
-            record.setId(UUID.randomUUID().toString());
-            record.setInvestmentId(investment.getId());
-            record.setInvestorId(investment.getInvestorUserId());
-            record.setCalculationMonth(month);
-            record.setPrincipalAmount(investment.getInvestmentAmount());
-            record.setInterestRate(investment.getMonthlyInterestRate());
-            record.setInterestAmount(interest);
-            record.setStatus(DomainEnums.InterestStatus.CREDITED);
-            record.setCalculatedAt(LocalDateTime.now());
-            record.setCreditedAt(LocalDateTime.now());
-            interestRecordRepository.save(record);
+            LocalDate dueDate = resolveNextInterestDueDate(investment);
+            boolean changed = false;
+            while (dueDate != null && !dueDate.isAfter(today)) {
+                String dueKey = dueDate.toString();
+                if (interestRecordRepository.existsByInvestmentIdAndCalculationMonth(investment.getId(), dueKey)) {
+                    dueDate = dueDate.plusMonths(1);
+                    investment.setNextInterestDueDate(dueDate);
+                    changed = true;
+                    continue;
+                }
+                BigDecimal interest = investment.getInvestmentAmount()
+                        .multiply(investment.getMonthlyInterestRate())
+                        .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+                InterestRecord record = new InterestRecord();
+                record.setId(UUID.randomUUID().toString());
+                record.setInvestmentId(investment.getId());
+                record.setInvestorId(investment.getInvestorUserId());
+                record.setCalculationMonth(dueKey);
+                record.setPrincipalAmount(investment.getInvestmentAmount());
+                record.setInterestRate(investment.getMonthlyInterestRate());
+                record.setInterestAmount(interest);
+                record.setStatus(DomainEnums.InterestStatus.CREDITED);
+                record.setCalculatedAt(LocalDateTime.now());
+                record.setCreditedAt(LocalDateTime.now());
+                interestRecordRepository.save(record);
 
-            Wallet investorWallet = getWalletByUserId(investment.getInvestorUserId());
-            creditWallet(investorWallet, investment.getInvestorUserId(), interest, DomainEnums.WalletTransactionType.INTEREST_CREDIT,
-                    record.getId(), "Monthly interest credited", "SYSTEM");
-            investment.setTotalInterestEarned(investment.getTotalInterestEarned().add(interest));
-            investmentRepository.save(investment);
-            notifyUser(investment.getInvestorUserId(), "Interest credited", "Interest of " + interest + " credited for " + month, DomainEnums.NotificationType.INTEREST_CREDITED);
-            processReferralCommissions(investment, interest, month);
-            processed++;
+                Wallet investorWallet = getWalletByUserId(investment.getInvestorUserId());
+                creditWallet(investorWallet, investment.getInvestorUserId(), interest, DomainEnums.WalletTransactionType.INTEREST_CREDIT,
+                        record.getId(), "Monthly interest credited for due date " + dueKey, "SYSTEM");
+                investment.setTotalInterestEarned(investment.getTotalInterestEarned().add(interest));
+                investment.setLastInterestCreditedAt(LocalDateTime.now());
+                dueDate = dueDate.plusMonths(1);
+                investment.setNextInterestDueDate(dueDate);
+                notifyUser(investment.getInvestorUserId(), "Interest credited", "Interest of " + interest + " credited for due date " + dueKey, DomainEnums.NotificationType.INTEREST_CREDITED);
+                processReferralCommissions(investment, interest, dueKey);
+                processed++;
+                changed = true;
+            }
+            if (changed) {
+                investmentRepository.save(investment);
+            }
         }
-        auditService.log(admin, "INTEREST_TRIGGERED", "InterestRun", month, null, "Processed: " + processed, request);
-        return Map.of("message", "Interest run completed", "month", month, "processedInvestments", processed);
+        auditService.log(admin, "INTEREST_TRIGGERED", "InterestRun", today.toString(), null, "Processed: " + processed, request);
+        return Map.of("message", "Interest run completed", "runDate", today, "processedInvestments", processed);
     }
 
     public Map<String, Object> getAdminDashboard() {
@@ -1740,15 +1806,25 @@ public class PlatformService {
 
     private void processReferralCommissions(Investment investment, BigDecimal interest, String month) {
         List<ReferralRelationship> uplines = referralRelationshipRepository.findByReferredUserIdOrderByReferralLevelAsc(investment.getInvestorUserId());
+        Map<Integer, BigDecimal> rates = getMonthlyReferralRates();
         for (ReferralRelationship relationship : uplines) {
+            BigDecimal rate = rates.get(relationship.getReferralLevel());
+            if (rate == null || rate.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            if (referralCommissionRepository.existsBySourceInvestmentIdAndCommissionMonthAndReferralLevelAndCommissionType(
+                    investment.getId(), month, relationship.getReferralLevel(), DomainEnums.ReferralCommissionType.MONTHLY_INTEREST_SHARE)) {
+                continue;
+            }
             ReferralCommission commission = new ReferralCommission();
             commission.setId(UUID.randomUUID().toString());
             commission.setBeneficiaryUserId(relationship.getReferrerUserId());
             commission.setSourceInvestorId(investment.getInvestorUserId());
             commission.setSourceInvestmentId(investment.getId());
             commission.setCommissionMonth(month);
+            commission.setCommissionType(DomainEnums.ReferralCommissionType.MONTHLY_INTEREST_SHARE);
             commission.setReferralLevel(relationship.getReferralLevel());
-            commission.setCommissionRate(getReferralRates().get(relationship.getReferralLevel()));
+            commission.setCommissionRate(rate);
             commission.setSourceInterestAmount(interest);
             BigDecimal amount = interest.multiply(commission.getCommissionRate()).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
             commission.setCommissionAmount(amount);
@@ -1757,9 +1833,9 @@ public class PlatformService {
                 commission.setStatus(DomainEnums.CommissionStatus.CREDITED);
                 commission.setCreditedAt(LocalDateTime.now());
                 Wallet wallet = getWalletByUserId(beneficiary.getId());
-                creditWallet(wallet, beneficiary.getId(), amount, DomainEnums.WalletTransactionType.REFERRAL_COMMISSION,
-                        commission.getId(), "Referral commission credited", "SYSTEM");
-                notifyUser(beneficiary.getId(), "Referral commission credited", amount + " credited for " + month, DomainEnums.NotificationType.REFERRAL_COMMISSION);
+                creditWallet(wallet, beneficiary.getId(), amount, DomainEnums.WalletTransactionType.REFERRAL_MONTHLY_INCOME,
+                        commission.getId(), "Referral monthly income from interest due date " + month, "SYSTEM");
+                notifyUser(beneficiary.getId(), "Referral monthly income credited", amount + " credited for due date " + month, DomainEnums.NotificationType.REFERRAL_COMMISSION);
             } else {
                 commission.setStatus(DomainEnums.CommissionStatus.SKIPPED);
                 commission.setSkipReason("Beneficiary inactive");
@@ -1769,16 +1845,19 @@ public class PlatformService {
     }
 
     private void processInvestmentActivationReferralCommissions(Investment investment) {
-        if (referralCommissionRepository.existsBySourceInvestmentIdAndCommissionMonth(
-                investment.getId(), INVESTMENT_ACTIVATION_COMMISSION_MONTH)) {
-            return;
-        }
-
         List<ReferralRelationship> uplines = referralRelationshipRepository
                 .findByReferredUserIdOrderByReferralLevelAsc(investment.getInvestorUserId());
+        Map<Integer, BigDecimal> rates = getInstantReferralRates();
         for (ReferralRelationship relationship : uplines) {
-            BigDecimal rate = getReferralRates().get(relationship.getReferralLevel());
-            if (rate == null) {
+            BigDecimal rate = rates.get(relationship.getReferralLevel());
+            if (rate == null || rate.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+            if (referralCommissionRepository.existsBySourceInvestmentIdAndCommissionMonthAndReferralLevelAndCommissionType(
+                    investment.getId(),
+                    INVESTMENT_ACTIVATION_COMMISSION_MONTH,
+                    relationship.getReferralLevel(),
+                    DomainEnums.ReferralCommissionType.INSTANT_CASHBACK)) {
                 continue;
             }
 
@@ -1788,6 +1867,7 @@ public class PlatformService {
             commission.setSourceInvestorId(investment.getInvestorUserId());
             commission.setSourceInvestmentId(investment.getId());
             commission.setCommissionMonth(INVESTMENT_ACTIVATION_COMMISSION_MONTH);
+            commission.setCommissionType(DomainEnums.ReferralCommissionType.INSTANT_CASHBACK);
             commission.setReferralLevel(relationship.getReferralLevel());
             commission.setCommissionRate(rate);
             commission.setSourceInterestAmount(investment.getInvestmentAmount());
@@ -1806,14 +1886,14 @@ public class PlatformService {
                         wallet,
                         beneficiary.getId(),
                         amount,
-                        DomainEnums.WalletTransactionType.REFERRAL_COMMISSION,
+                        DomainEnums.WalletTransactionType.REFERRAL_INSTANT_CASHBACK,
                         commission.getId(),
-                        "Referral commission credited on investment activation",
+                        "Referral instant cashback from investment activation",
                         "SYSTEM"
                 );
                 notifyUser(
                         beneficiary.getId(),
-                        "Referral commission credited",
+                        "Referral instant cashback credited",
                         amount + " credited after your referral activated an investment.",
                         DomainEnums.NotificationType.REFERRAL_COMMISSION
                 );
@@ -1967,16 +2047,49 @@ public class PlatformService {
                 });
     }
 
-    private Map<Integer, BigDecimal> getReferralRates() {
-        Map<Integer, BigDecimal> rates = new LinkedHashMap<>(REFERRAL_RATES);
-        for (int level = 1; level <= 5; level++) {
+    private Map<Integer, BigDecimal> getInstantReferralRates() {
+        Map<Integer, BigDecimal> rates = new LinkedHashMap<>(DEFAULT_INSTANT_REFERRAL_RATES);
+        for (int level = 1; level <= MAX_REFERRAL_LEVEL; level++) {
             int referralLevel = level;
-            platformSettingRepository.findById("referral.rate.level" + referralLevel)
+            Optional<BigDecimal> configuredRate = platformSettingRepository.findById("referral.instant.level" + referralLevel)
+                    .map(PlatformSetting::getSettingValue)
+                    .map(this::parsePositiveDecimal);
+            if (configuredRate.isEmpty()) {
+                configuredRate = platformSettingRepository.findById("referral.rate.level" + referralLevel)
+                        .map(PlatformSetting::getSettingValue)
+                        .map(this::parsePositiveDecimal);
+            }
+            configuredRate.ifPresent(rate -> rates.put(referralLevel, rate));
+        }
+        return rates;
+    }
+
+    private Map<Integer, BigDecimal> getMonthlyReferralRates() {
+        Map<Integer, BigDecimal> rates = new LinkedHashMap<>(DEFAULT_MONTHLY_REFERRAL_RATES);
+        for (int level = 1; level <= MAX_REFERRAL_LEVEL; level++) {
+            int referralLevel = level;
+            platformSettingRepository.findById("referral.monthly.level" + referralLevel)
                     .map(PlatformSetting::getSettingValue)
                     .map(this::parsePositiveDecimal)
                     .ifPresent(rate -> rates.put(referralLevel, rate));
         }
         return rates;
+    }
+
+    private LocalDate resolveNextInterestDueDate(Investment investment) {
+        if (investment.getNextInterestDueDate() != null) {
+            return investment.getNextInterestDueDate();
+        }
+        LocalDate activatedDate = investment.getActivatedAt() == null
+                ? LocalDate.now()
+                : investment.getActivatedAt().toLocalDate();
+        LocalDate dueDate = activatedDate.plusMonths(1);
+        investment.setNextInterestDueDate(dueDate);
+        return dueDate;
+    }
+
+    private BigDecimal firstNonNull(BigDecimal first, BigDecimal second) {
+        return first != null ? first : second;
     }
 
     private BigDecimal parsePositiveDecimal(String value) {
@@ -2275,6 +2388,8 @@ public class PlatformService {
         investment.setActivatedAt(LocalDateTime.now());
         investment.setActivatedByAdminId(activatedBy);
         investment.setMaturityDate(LocalDate.now().plusMonths(plan.getLockInMonths()));
+        investment.setNextInterestDueDate(LocalDate.now().plusMonths(1));
+        investment.setLastInterestCreditedAt(null);
         investment.setMonthlyInterestRate(plan.getMonthlyInterestRate());
         investment.setNotes(notes);
         Investment saved = investmentRepository.save(investment);
