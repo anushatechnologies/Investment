@@ -104,10 +104,15 @@ public final class DomainEnums {
 
     public enum NotificationType {
         KYC_UPDATE,
+        KYC_APPROVED,
+        KYC_REJECTED,
         INVESTMENT_UPDATE,
         INTEREST_CREDITED,
         WITHDRAWAL_UPDATE,
         REFERRAL_COMMISSION,
+        REFERRAL_INSTANT_CASHBACK,
+        REFERRAL_MONTHLY_INCOME,
+        COUPON_CASHBACK,
         FRAUD_ALERT,
         SYSTEM
     }

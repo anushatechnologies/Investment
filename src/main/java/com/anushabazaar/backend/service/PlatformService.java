@@ -33,6 +33,7 @@ public class PlatformService {
     private static final String WITHDRAWAL_ALERT_THRESHOLD_KEY = "withdrawal.largeAlertThreshold";
     private static final String WITHDRAWAL_PROCESSING_TIME_KEY = "withdrawal.processingTime";
     private static final String WITHDRAWAL_PREFERRED_METHOD_KEY = "withdrawal.preferredMethod";
+    private static final String LEGAL_SETTING_PREFIX = "legal.document.";
     private static final BigDecimal DEFAULT_WITHDRAWAL_MIN_AMOUNT = new BigDecimal("1000");
     private static final BigDecimal DEFAULT_WITHDRAWAL_MAX_AMOUNT = BigDecimal.ZERO;
     private static final BigDecimal DEFAULT_WITHDRAWAL_DAILY_LIMIT = BigDecimal.ZERO;
@@ -53,6 +54,7 @@ public class PlatformService {
             4, BigDecimal.ZERO,
             5, BigDecimal.ZERO
     );
+    private static final Set<String> LEGAL_DOCUMENT_KEYS = Set.of("privacy-policy", "terms-and-conditions");
 
     private final UserRepository userRepository;
     private final KycSubmissionRepository kycSubmissionRepository;
@@ -447,7 +449,7 @@ public class PlatformService {
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         KycSubmission saved = kycSubmissionRepository.save(kyc);
-        notifyUser(user.getId(), "KYC approved", "Your KYC has been approved. Link your bank account to continue.", DomainEnums.NotificationType.KYC_UPDATE);
+        notifyUser(user.getId(), "KYC approved", "Your KYC has been approved. Link your bank account to continue.", DomainEnums.NotificationType.KYC_APPROVED);
         auditService.log(admin, "KYC_APPROVED", "KycSubmission", id, null, "APPROVED", request);
         return saved;
     }
@@ -471,7 +473,7 @@ public class PlatformService {
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         KycSubmission saved = kycSubmissionRepository.save(kyc);
-        notifyUser(user.getId(), "KYC rejected", "KYC rejected. Reason: " + body.reason(), DomainEnums.NotificationType.KYC_UPDATE);
+        notifyUser(user.getId(), "KYC rejected", "KYC rejected. Reason: " + body.reason(), DomainEnums.NotificationType.KYC_REJECTED);
         auditService.log(admin, "KYC_REJECTED", "KycSubmission", id, null, body.reason(), request);
         return saved;
     }
@@ -593,6 +595,44 @@ public class PlatformService {
         return settings;
     }
 
+    public List<Map<String, Object>> getLegalDocuments() {
+        return LEGAL_DOCUMENT_KEYS.stream()
+                .sorted()
+                .map(this::getLegalDocument)
+                .toList();
+    }
+
+    public Map<String, Object> getLegalDocument(String documentKey) {
+        String key = normalizeLegalDocumentKey(documentKey);
+        return platformSettingRepository.findById(LEGAL_SETTING_PREFIX + key)
+                .map(PlatformSetting::getSettingValue)
+                .map(this::readSettingMap)
+                .map(document -> applyLegalDocumentDefaults(key, document))
+                .orElseGet(() -> defaultLegalDocument(key));
+    }
+
+    @Transactional
+    public Map<String, Object> updateLegalDocument(User admin, String documentKey, ApiDtos.UpdateLegalDocumentRequest body, HttpServletRequest request) {
+        String key = normalizeLegalDocumentKey(documentKey);
+        if (isBlank(body.title()) || isBlank(body.content())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Title and content are required");
+        }
+
+        Map<String, Object> existing = getLegalDocument(key);
+        Map<String, Object> next = new LinkedHashMap<>();
+        next.put("key", key);
+        next.put("title", body.title().trim());
+        next.put("summary", firstNonBlank(body.summary(), asText(existing.get("summary"))));
+        next.put("content", body.content().trim());
+        next.put("effectiveDate", firstNonBlank(body.effectiveDate(), asText(existing.get("effectiveDate"))));
+        next.put("updatedAt", LocalDateTime.now().toString());
+        next.put("updatedBy", admin.getId());
+
+        upsertSetting(LEGAL_SETTING_PREFIX + key, writeSettingJson(next), admin.getId());
+        auditService.log(admin, "LEGAL_DOCUMENT_UPDATED", "PlatformSetting", key, existing.toString(), next.toString(), request);
+        return next;
+    }
+
     @Transactional
     public Map<String, Object> updateWithdrawalSettings(User admin, ApiDtos.UpdateWithdrawalSettingsRequest body, HttpServletRequest request) {
         Map<String, Object> current = getWithdrawalSettings();
@@ -665,10 +705,10 @@ public class PlatformService {
         );
         Map<Integer, BigDecimal> nextMonthlyRates = Map.of(
                 1, sanitizeReferralRate(body.level1MonthlyRate(), DEFAULT_MONTHLY_REFERRAL_RATES.get(1)),
-                2, sanitizeReferralRate(body.level2MonthlyRate(), DEFAULT_MONTHLY_REFERRAL_RATES.get(2)),
-                3, sanitizeReferralRate(body.level3MonthlyRate(), DEFAULT_MONTHLY_REFERRAL_RATES.get(3)),
-                4, sanitizeReferralRate(body.level4MonthlyRate(), DEFAULT_MONTHLY_REFERRAL_RATES.get(4)),
-                5, sanitizeReferralRate(body.level5MonthlyRate(), DEFAULT_MONTHLY_REFERRAL_RATES.get(5))
+                2, BigDecimal.ZERO,
+                3, BigDecimal.ZERO,
+                4, BigDecimal.ZERO,
+                5, BigDecimal.ZERO
         );
         nextInstantRates.forEach((level, rate) -> {
             upsertSetting("referral.instant.level" + level, rate.toPlainString(), admin.getId());
@@ -678,6 +718,129 @@ public class PlatformService {
         auditService.log(admin, "REFERRAL_SETTINGS_UPDATED", "PlatformSetting", "referral-rates", null,
                 Map.of("instant", nextInstantRates, "monthly", nextMonthlyRates).toString(), request);
         return getReferralSettings();
+    }
+
+    public Map<String, Object> previewReferralPayoutForInvestment(String investmentId) {
+        Investment investment = getInvestment(investmentId);
+        InvestmentPlan plan = getPlan(investment.getInvestmentPlanId());
+        return buildReferralPayoutPreview(
+                investment.getInvestorUserId(),
+                investment.getInvestmentAmount(),
+                firstNonNull(investment.getMonthlyInterestRate(), plan.getMonthlyInterestRate()),
+                investment.getId(),
+                plan.getPlanName()
+        );
+    }
+
+    public Map<String, Object> simulateReferralPayout(ApiDtos.ReferralPayoutSimulationRequest body) {
+        if (isBlank(body.investorUserId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investor user id is required");
+        }
+        User investor = getUser(body.investorUserId());
+        BigDecimal investmentAmount = sanitizeAmount(body.investmentAmount(), BigDecimal.ZERO);
+        if (investmentAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investment amount must be greater than zero");
+        }
+        InvestmentPlan plan = isBlank(body.investmentPlanId()) ? null : getPlan(body.investmentPlanId());
+        BigDecimal monthlyRate = plan == null ? BigDecimal.ZERO : plan.getMonthlyInterestRate();
+        return buildReferralPayoutPreview(
+                investor.getId(),
+                investmentAmount,
+                monthlyRate,
+                null,
+                plan == null ? "Manual simulation" : plan.getPlanName()
+        );
+    }
+
+    private Map<String, Object> buildReferralPayoutPreview(String investorUserId,
+                                                           BigDecimal investmentAmount,
+                                                           BigDecimal planMonthlyRate,
+                                                           String investmentId,
+                                                           String planName) {
+        User investor = getUser(investorUserId);
+        BigDecimal monthlyInterest = investmentAmount
+                .multiply(planMonthlyRate == null ? BigDecimal.ZERO : planMonthlyRate)
+                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+        Map<Integer, BigDecimal> instantRates = getInstantReferralRates();
+        Map<Integer, BigDecimal> monthlyRates = getMonthlyReferralRates();
+        List<ReferralRelationship> uplines = referralRelationshipRepository.findByReferredUserIdOrderByReferralLevelAsc(investorUserId);
+
+        List<Map<String, Object>> instantRows = new ArrayList<>();
+        List<Map<String, Object>> monthlyRows = new ArrayList<>();
+        for (ReferralRelationship relationship : uplines) {
+            User beneficiary = userRepository.findById(relationship.getReferrerUserId()).orElse(null);
+            BigDecimal instantRate = instantRates.getOrDefault(relationship.getReferralLevel(), BigDecimal.ZERO);
+            BigDecimal instantAmount = investmentAmount.multiply(instantRate).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+            Map<String, Object> instantRow = referralPreviewRow(
+                    beneficiary,
+                    relationship.getReferralLevel(),
+                    "Instant Cashback",
+                    "Investment Amount",
+                    investmentAmount,
+                    instantRate,
+                    instantAmount
+            );
+            instantRows.add(instantRow);
+
+            if (relationship.getReferralLevel() == 1) {
+                BigDecimal monthlyRate = monthlyRates.getOrDefault(1, BigDecimal.ZERO);
+                BigDecimal monthlyAmount = monthlyInterest.multiply(monthlyRate).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+                monthlyRows.add(referralPreviewRow(
+                        beneficiary,
+                        relationship.getReferralLevel(),
+                        "Monthly Interest Share",
+                        "Interest Amount",
+                        monthlyInterest,
+                        monthlyRate,
+                        monthlyAmount
+                ));
+            }
+        }
+
+        BigDecimal instantTotal = instantRows.stream()
+                .map(row -> (BigDecimal) row.get("payoutAmount"))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal monthlyTotal = monthlyRows.stream()
+                .map(row -> (BigDecimal) row.get("payoutAmount"))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("investmentId", investmentId);
+        response.put("planName", planName);
+        response.put("investorUserId", investor.getId());
+        response.put("investorName", investor.getFullName());
+        response.put("investmentAmount", investmentAmount);
+        response.put("planMonthlyInterestRate", planMonthlyRate == null ? BigDecimal.ZERO : planMonthlyRate);
+        response.put("investorMonthlyInterest", monthlyInterest);
+        response.put("instantCashbackRows", instantRows);
+        response.put("monthlyIncomeRows", monthlyRows);
+        response.put("instantCashbackTotal", instantTotal);
+        response.put("monthlyIncomeTotal", monthlyTotal);
+        response.put("maxPaidLevels", MAX_REFERRAL_LEVEL);
+        response.put("monthlyRule", "Only Level 1 direct referrer receives monthly referral income.");
+        return response;
+    }
+
+    private Map<String, Object> referralPreviewRow(User beneficiary,
+                                                   Integer level,
+                                                   String type,
+                                                   String sourceLabel,
+                                                   BigDecimal sourceAmount,
+                                                   BigDecimal rate,
+                                                   BigDecimal payoutAmount) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("beneficiaryUserId", beneficiary == null ? null : beneficiary.getId());
+        row.put("beneficiaryName", beneficiary == null ? "Unknown user" : beneficiary.getFullName());
+        row.put("beneficiaryStatus", beneficiary == null ? null : beneficiary.getAccountStatus());
+        row.put("level", level);
+        row.put("type", type);
+        row.put("sourceLabel", sourceLabel);
+        row.put("sourceAmount", sourceAmount);
+        row.put("rate", rate);
+        row.put("payoutAmount", payoutAmount);
+        row.put("payable", beneficiary != null && beneficiary.getAccountStatus() == DomainEnums.AccountStatus.ACTIVE);
+        row.put("holdReason", beneficiary == null ? "Beneficiary not found" : beneficiary.getAccountStatus() == DomainEnums.AccountStatus.ACTIVE ? null : "Beneficiary inactive");
+        return row;
     }
 
     @Transactional
@@ -1033,6 +1196,112 @@ public class PlatformService {
 
     public List<WalletTransaction> getWalletTransactions(User user) {
         return walletTransactionRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+    }
+
+    public Map<String, Object> getWalletTransactionProof(User user, String transactionId) {
+        WalletTransaction transaction = walletTransactionRepository.findById(transactionId)
+                .filter(tx -> user.getId().equals(tx.getUserId()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Wallet transaction not found"));
+        return buildWalletTransactionProof(transaction);
+    }
+
+    private Map<String, Object> buildWalletTransactionProof(WalletTransaction transaction) {
+        Map<String, Object> proof = new LinkedHashMap<>();
+        proof.put("transaction", transaction);
+        proof.put("transactionType", transaction.getTransactionType());
+        proof.put("amount", transaction.getAmount());
+        proof.put("direction", transaction.getDirection());
+        proof.put("description", transaction.getDescription());
+        proof.put("referenceId", transaction.getReferenceId());
+
+        if (!isBlank(transaction.getReferenceId())) {
+            referralCommissionRepository.findById(transaction.getReferenceId()).ifPresent(commission -> {
+                User sourceInvestor = userRepository.findById(commission.getSourceInvestorId()).orElse(null);
+                Map<String, Object> commissionProof = new LinkedHashMap<>();
+                commissionProof.put("commissionType", commission.getCommissionType());
+                commissionProof.put("sourceInvestorName", sourceInvestor == null ? "Unknown user" : sourceInvestor.getFullName());
+                commissionProof.put("sourceInvestmentId", commission.getSourceInvestmentId());
+                commissionProof.put("level", commission.getReferralLevel());
+                commissionProof.put("rate", commission.getCommissionRate());
+                commissionProof.put("sourceAmount", commission.getSourceInterestAmount());
+                commissionProof.put("sourceAmountLabel", commission.getCommissionType() == DomainEnums.ReferralCommissionType.INSTANT_CASHBACK ? "Investment Amount" : "Interest Amount");
+                commissionProof.put("commissionAmount", commission.getCommissionAmount());
+                commissionProof.put("status", commission.getStatus());
+                proof.put("referralCommission", commissionProof);
+            });
+            interestRecordRepository.findById(transaction.getReferenceId()).ifPresent(record -> proof.put("interestRecord", record));
+            couponRedemptionRepository.findById(transaction.getReferenceId()).ifPresent(redemption -> proof.put("couponRedemption", redemption));
+        }
+        return proof;
+    }
+
+    @Transactional
+    public Map<String, Object> releaseHeldReferralCommission(User admin, String commissionId, HttpServletRequest request) {
+        ReferralCommission commission = referralCommissionRepository.findById(commissionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Referral commission not found"));
+        if (commission.getStatus() == DomainEnums.CommissionStatus.CREDITED) {
+            return Map.of("commission", commission, "message", "Commission already credited");
+        }
+
+        User beneficiary = getUser(commission.getBeneficiaryUserId());
+        if (beneficiary.getAccountStatus() != DomainEnums.AccountStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Beneficiary account must be active before release");
+        }
+
+        DomainEnums.WalletTransactionType transactionType =
+                commission.getCommissionType() == DomainEnums.ReferralCommissionType.INSTANT_CASHBACK
+                        ? DomainEnums.WalletTransactionType.REFERRAL_INSTANT_CASHBACK
+                        : DomainEnums.WalletTransactionType.REFERRAL_MONTHLY_INCOME;
+        DomainEnums.NotificationType notificationType =
+                commission.getCommissionType() == DomainEnums.ReferralCommissionType.INSTANT_CASHBACK
+                        ? DomainEnums.NotificationType.REFERRAL_INSTANT_CASHBACK
+                        : DomainEnums.NotificationType.REFERRAL_MONTHLY_INCOME;
+
+        Wallet wallet = getWalletByUserId(beneficiary.getId());
+        creditWallet(wallet, beneficiary.getId(), commission.getCommissionAmount(), transactionType,
+                commission.getId(), "Held referral payout released by admin", admin.getId());
+        commission.setStatus(DomainEnums.CommissionStatus.CREDITED);
+        commission.setSkipReason(null);
+        commission.setCreditedAt(LocalDateTime.now());
+        ReferralCommission saved = referralCommissionRepository.save(commission);
+        notifyUser(beneficiary.getId(), "Referral payout released", commission.getCommissionAmount() + " credited to your wallet.", notificationType);
+        auditService.log(admin, "REFERRAL_COMMISSION_RELEASED", "ReferralCommission", commission.getId(), null, saved.getStatus().name(), request);
+        return Map.of("commission", saved, "message", "Referral commission released");
+    }
+
+    @Transactional
+    public Map<String, Object> adminAdjustWallet(User admin, ApiDtos.AdminWalletAdjustmentRequest body, HttpServletRequest request) {
+        User target = getUser(body.userId());
+        Wallet wallet = getWalletByUserId(target.getId());
+        BigDecimal amount = body.amount();
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) == 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Adjustment amount cannot be zero");
+        }
+        String referenceId = "ADMIN_ADJUSTMENT:" + UUID.randomUUID();
+        String reason = firstNonBlank(body.reason(), "Admin wallet adjustment");
+        if (amount.compareTo(BigDecimal.ZERO) > 0) {
+            creditWallet(wallet, target.getId(), amount, DomainEnums.WalletTransactionType.ADMIN_ADJUSTMENT,
+                    referenceId, reason, admin.getId());
+        } else {
+            BigDecimal debitAmount = amount.abs();
+            if (wallet.getAvailableBalance().compareTo(debitAmount) < 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient wallet balance for debit adjustment");
+            }
+            wallet.setAvailableBalance(wallet.getAvailableBalance().subtract(debitAmount));
+            wallet.setTotalDebited(wallet.getTotalDebited().add(debitAmount));
+            wallet.setLastUpdatedAt(LocalDateTime.now());
+            walletRepository.save(wallet);
+            createWalletTransaction(wallet, target.getId(), DomainEnums.WalletTransactionType.ADMIN_ADJUSTMENT,
+                    DomainEnums.Direction.DEBIT, debitAmount, referenceId, reason, admin.getId());
+        }
+        notifyUser(target.getId(), "Wallet adjusted", reason + ". Amount: " + amount, DomainEnums.NotificationType.SYSTEM);
+        auditService.log(admin, "WALLET_ADJUSTED", "Wallet", wallet.getId(), null, amount + " - " + reason, request);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("wallet", wallet);
+        response.put("user", target);
+        response.put("amount", amount);
+        response.put("reason", reason);
+        return response;
     }
 
     @Transactional
@@ -1549,6 +1818,33 @@ public class PlatformService {
         );
     }
 
+    public Map<String, Object> getNotificationPreferences(User user) {
+        Map<String, Object> preferences = new LinkedHashMap<>();
+        for (String category : List.of("kyc", "investment", "interest", "referral", "cashback", "withdrawal", "system")) {
+            preferences.put(category, getBooleanSetting(notificationPreferenceKey(user.getId(), category), true));
+        }
+        return preferences;
+    }
+
+    @Transactional
+    public Map<String, Object> updateNotificationPreferences(User user, ApiDtos.UpdateNotificationPreferencesRequest body, HttpServletRequest request) {
+        Map<String, Boolean> updates = new LinkedHashMap<>();
+        updates.put("kyc", body.kyc());
+        updates.put("investment", body.investment());
+        updates.put("interest", body.interest());
+        updates.put("referral", body.referral());
+        updates.put("cashback", body.cashback());
+        updates.put("withdrawal", body.withdrawal());
+        updates.put("system", body.system());
+        updates.forEach((category, enabled) -> {
+            if (enabled != null) {
+                upsertSetting(notificationPreferenceKey(user.getId(), category), Boolean.toString(enabled), user.getId());
+            }
+        });
+        auditService.log(user, "NOTIFICATION_PREFERENCES_UPDATED", "NotificationPreference", user.getId(), null, getNotificationPreferences(user).toString(), request);
+        return getNotificationPreferences(user);
+    }
+
     @Transactional
     public Notification markNotificationRead(User user, String id, HttpServletRequest request) {
         Notification notification = notificationRepository.findByIdAndUserId(id, user.getId())
@@ -1744,9 +2040,17 @@ public class PlatformService {
                     row.put("sourceInvestorName", source == null ? "Unknown user" : source.getFullName());
                     row.put("sourceInvestmentId", commission.getSourceInvestmentId());
                     row.put("month", commission.getCommissionMonth());
+                    row.put("commissionType", commission.getCommissionType());
+                    row.put("typeLabel", commission.getCommissionType() == DomainEnums.ReferralCommissionType.INSTANT_CASHBACK
+                            ? "Instant Cashback"
+                            : "Monthly Interest Share");
                     row.put("level", commission.getReferralLevel());
                     row.put("rate", commission.getCommissionRate());
                     row.put("sourceInterestAmount", commission.getSourceInterestAmount());
+                    row.put("sourceAmount", commission.getSourceInterestAmount());
+                    row.put("sourceAmountLabel", commission.getCommissionType() == DomainEnums.ReferralCommissionType.INSTANT_CASHBACK
+                            ? "Investment Amount"
+                            : "Interest Amount");
                     row.put("commissionAmount", commission.getCommissionAmount());
                     row.put("status", commission.getStatus());
                     row.put("skipReason", commission.getSkipReason());
@@ -1758,7 +2062,9 @@ public class PlatformService {
                 "commissions", rows,
                 "total", rows.size(),
                 "credited", commissions.stream().filter(c -> c.getStatus() == DomainEnums.CommissionStatus.CREDITED).count(),
-                "skipped", commissions.stream().filter(c -> c.getStatus() == DomainEnums.CommissionStatus.SKIPPED).count()
+                "skipped", commissions.stream().filter(c -> c.getStatus() == DomainEnums.CommissionStatus.SKIPPED).count(),
+                "instantCashback", commissions.stream().filter(c -> c.getCommissionType() == DomainEnums.ReferralCommissionType.INSTANT_CASHBACK).count(),
+                "monthlyIncome", commissions.stream().filter(c -> c.getCommissionType() == DomainEnums.ReferralCommissionType.MONTHLY_INTEREST_SHARE).count()
         );
     }
 
@@ -1835,7 +2141,7 @@ public class PlatformService {
                 Wallet wallet = getWalletByUserId(beneficiary.getId());
                 creditWallet(wallet, beneficiary.getId(), amount, DomainEnums.WalletTransactionType.REFERRAL_MONTHLY_INCOME,
                         commission.getId(), "Referral monthly income from interest due date " + month, "SYSTEM");
-                notifyUser(beneficiary.getId(), "Referral monthly income credited", amount + " credited for due date " + month, DomainEnums.NotificationType.REFERRAL_COMMISSION);
+                notifyUser(beneficiary.getId(), "Referral monthly income credited", amount + " credited for due date " + month, DomainEnums.NotificationType.REFERRAL_MONTHLY_INCOME);
             } else {
                 commission.setStatus(DomainEnums.CommissionStatus.SKIPPED);
                 commission.setSkipReason("Beneficiary inactive");
@@ -1895,7 +2201,7 @@ public class PlatformService {
                         beneficiary.getId(),
                         "Referral instant cashback credited",
                         amount + " credited after your referral activated an investment.",
-                        DomainEnums.NotificationType.REFERRAL_COMMISSION
+                        DomainEnums.NotificationType.REFERRAL_INSTANT_CASHBACK
                 );
             } else {
                 commission.setStatus(DomainEnums.CommissionStatus.SKIPPED);
@@ -2035,7 +2341,7 @@ public class PlatformService {
         investmentRepository.save(investment);
         notifyUser(investment.getInvestorUserId(), "Coupon cashback credited",
                 investment.getCouponCashbackAmount() + " credited for coupon " + investment.getAppliedCouponCode(),
-                DomainEnums.NotificationType.INVESTMENT_UPDATE);
+                DomainEnums.NotificationType.COUPON_CASHBACK);
     }
 
     private void cancelCouponRedemption(String investmentId) {
@@ -2066,13 +2372,10 @@ public class PlatformService {
 
     private Map<Integer, BigDecimal> getMonthlyReferralRates() {
         Map<Integer, BigDecimal> rates = new LinkedHashMap<>(DEFAULT_MONTHLY_REFERRAL_RATES);
-        for (int level = 1; level <= MAX_REFERRAL_LEVEL; level++) {
-            int referralLevel = level;
-            platformSettingRepository.findById("referral.monthly.level" + referralLevel)
-                    .map(PlatformSetting::getSettingValue)
-                    .map(this::parsePositiveDecimal)
-                    .ifPresent(rate -> rates.put(referralLevel, rate));
-        }
+        platformSettingRepository.findById("referral.monthly.level1")
+                .map(PlatformSetting::getSettingValue)
+                .map(this::parsePositiveDecimal)
+                .ifPresent(rate -> rates.put(1, rate));
         return rates;
     }
 
@@ -2120,6 +2423,94 @@ public class PlatformService {
                 .map(PlatformSetting::getSettingValue)
                 .filter(value -> !isBlank(value))
                 .orElse(fallback);
+    }
+
+    private String normalizeLegalDocumentKey(String documentKey) {
+        String key = documentKey == null ? "" : documentKey.trim().toLowerCase(Locale.ROOT);
+        if (!LEGAL_DOCUMENT_KEYS.contains(key)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Legal document not found");
+        }
+        return key;
+    }
+
+    private Map<String, Object> applyLegalDocumentDefaults(String key, Map<String, Object> document) {
+        Map<String, Object> defaults = defaultLegalDocument(key);
+        Map<String, Object> merged = new LinkedHashMap<>(defaults);
+        if (document != null) {
+            merged.putAll(document);
+        }
+        merged.put("key", key);
+        return merged;
+    }
+
+    private Map<String, Object> defaultLegalDocument(String key) {
+        Map<String, Object> document = new LinkedHashMap<>();
+        document.put("key", key);
+        document.put("effectiveDate", "2026-06-03");
+        document.put("updatedAt", null);
+        document.put("updatedBy", "SYSTEM");
+        if ("privacy-policy".equals(key)) {
+            document.put("title", "Privacy Policy");
+            document.put("summary", "How Anusha Trade collects, uses, stores, and protects investor data.");
+            document.put("content", """
+                    1. Information We Collect
+                    We may collect your mobile number, full name, email, KYC details, bank details, payment information, referral activity, support messages, and platform usage records.
+
+                    2. How We Use Information
+                    We use this information for account registration, OTP verification, KYC review, investment processing, wallet withdrawals, fraud monitoring, support, notices, audit logs, and legal compliance.
+
+                    3. Data Sharing
+                    We do not sell personal data. We may share data with verification, payment, storage, compliance, or support partners only where needed to operate the platform or satisfy lawful requirements.
+
+                    4. Security
+                    We use token-based authentication, role-based access controls, audit trails, and reasonable operational safeguards to protect investor information.
+
+                    5. Consent and Communications
+                    By registering or continuing to use the platform, you consent to receive service, security, KYC, account, investment, wallet, and support communications.
+
+                    6. Policy Updates
+                    We may revise this policy periodically. Continued platform usage after an update indicates acceptance of the revised policy.
+                    """.trim());
+        } else {
+            document.put("title", "Terms and Conditions");
+            document.put("summary", "Investment, wallet, KYC, referral, and platform usage rules for Anusha Trade.");
+            document.put("content", """
+                    1. Account Eligibility
+                    You must provide accurate registration, KYC, bank, and payment details. Anusha Trade may reject, suspend, or restrict accounts with invalid or suspicious information.
+
+                    2. Investment Rules
+                    Investment limits, lock-in periods, monthly interest, coupon benefits, and maturity values are controlled by active platform settings and may be updated by the admin panel.
+
+                    3. KYC and Bank Verification
+                    KYC approval and verified bank details may be required before investment, wallet withdrawal, account activation, MPIN setup, or other account actions.
+
+                    4. Withdrawals
+                    Wallet withdrawals are subject to minimum and maximum limits, daily and monthly rules, available balance, bank verification, fraud checks, and admin approval.
+
+                    5. Referral and Coupon Benefits
+                    Referral commissions and coupon cashback are calculated using current platform rules and may be withheld, reversed, or rejected if misuse or policy abuse is detected.
+
+                    6. Platform Changes
+                    Anusha Trade may update operational rules, policies, fees, limits, supported payment methods, and account workflows. Continued usage indicates acceptance of updated terms.
+                    """.trim());
+        }
+        return document;
+    }
+
+    private Map<String, Object> readSettingMap(String payload) {
+        try {
+            return objectMapper.readValue(payload, new TypeReference<>() {});
+        } catch (Exception ex) {
+            return Map.of();
+        }
+    }
+
+    private String writeSettingJson(Map<String, Object> payload) {
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not save platform setting");
+        }
     }
 
     private BigDecimal sanitizeAmount(BigDecimal amount, BigDecimal fallback) {
@@ -2399,6 +2790,9 @@ public class PlatformService {
     }
 
     private void notifyUser(String userId, String title, String message, DomainEnums.NotificationType type) {
+        if (!isNotificationTypeEnabled(userId, type)) {
+            return;
+        }
         Notification notification = new Notification();
         notification.setId(UUID.randomUUID().toString());
         notification.setUserId(userId);
@@ -2409,6 +2803,26 @@ public class PlatformService {
         notification.setReadFlag(false);
         notification.setSentAt(LocalDateTime.now());
         notificationRepository.save(notification);
+    }
+
+    private boolean isNotificationTypeEnabled(String userId, DomainEnums.NotificationType type) {
+        if (type == null) {
+            return true;
+        }
+        String category = switch (type) {
+            case KYC_APPROVED, KYC_REJECTED, KYC_UPDATE -> "kyc";
+            case INVESTMENT_UPDATE -> "investment";
+            case INTEREST_CREDITED -> "interest";
+            case REFERRAL_COMMISSION, REFERRAL_INSTANT_CASHBACK, REFERRAL_MONTHLY_INCOME -> "referral";
+            case COUPON_CASHBACK -> "cashback";
+            case WITHDRAWAL_UPDATE -> "withdrawal";
+            case SYSTEM, FRAUD_ALERT -> "system";
+        };
+        return getBooleanSetting(notificationPreferenceKey(userId, category), true);
+    }
+
+    private String notificationPreferenceKey(String userId, String category) {
+        return "notification.preference." + userId + "." + category;
     }
 
     private void createFraudAlert(String userId, DomainEnums.AlertLevel level, String rule, String description) {

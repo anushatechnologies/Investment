@@ -1,5 +1,6 @@
 package com.anushabazaar.backend.controller;
 
+import com.anushabazaar.backend.dto.ApiDtos;
 import com.anushabazaar.backend.service.CurrentUserService;
 import com.anushabazaar.backend.service.PlatformService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,6 +23,16 @@ public class NotificationController {
     @GetMapping
     public Object notifications() {
         return platformService.getNotifications(currentUserService.requireCurrentUser());
+    }
+
+    @GetMapping("/preferences")
+    public Object preferences() {
+        return platformService.getNotificationPreferences(currentUserService.requireCurrentUser());
+    }
+
+    @PutMapping("/preferences")
+    public Object updatePreferences(@RequestBody ApiDtos.UpdateNotificationPreferencesRequest request, HttpServletRequest servletRequest) {
+        return platformService.updateNotificationPreferences(currentUserService.requireCurrentUser(), request, servletRequest);
     }
 
     @GetMapping("/summary")

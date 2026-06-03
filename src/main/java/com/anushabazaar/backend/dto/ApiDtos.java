@@ -196,6 +196,25 @@ public final class ApiDtos {
                                                  BigDecimal level5MonthlyRate) {
     }
 
+    public record ReferralPayoutSimulationRequest(String investorUserId,
+                                                  String investmentPlanId,
+                                                  @NotNull BigDecimal investmentAmount) {
+    }
+
+    public record AdminWalletAdjustmentRequest(@NotBlank String userId,
+                                               @NotNull BigDecimal amount,
+                                               @NotBlank String reason) {
+    }
+
+    public record UpdateNotificationPreferencesRequest(Boolean kyc,
+                                                       Boolean investment,
+                                                       Boolean interest,
+                                                       Boolean referral,
+                                                       Boolean cashback,
+                                                       Boolean withdrawal,
+                                                       Boolean system) {
+    }
+
     public record VerifyRazorpayPaymentRequest(
             @NotBlank String investmentId,
             @NotBlank String razorpayOrderId,
@@ -251,5 +270,11 @@ public final class ApiDtos {
     }
 
     public record RespondSupportTicketRequest(String status, String adminReply) {
+    }
+
+    public record UpdateLegalDocumentRequest(@NotBlank String title,
+                                             String summary,
+                                             @NotBlank String content,
+                                             String effectiveDate) {
     }
 }

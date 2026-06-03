@@ -30,6 +30,11 @@ public class WalletWithdrawalController {
         return platformService.getWalletTransactions(currentUserService.requireCurrentUser());
     }
 
+    @GetMapping("/api/wallet/transactions/{id}/proof")
+    public Object walletTransactionProof(@PathVariable("id") String id) {
+        return platformService.getWalletTransactionProof(currentUserService.requireCurrentUser(), id);
+    }
+
     @GetMapping("/api/withdrawals/settings")
     public Object withdrawalSettings() {
         return platformService.getWithdrawalSettings();

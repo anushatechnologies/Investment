@@ -86,14 +86,34 @@ public class AdminOpsController {
         return platformService.getReferralCommissionReview();
     }
 
+    @PostMapping("/api/admin/referrals/commissions/{commissionId}/release")
+    public Object releaseReferralCommission(@PathVariable("commissionId") String commissionId, HttpServletRequest servletRequest) {
+        return platformService.releaseHeldReferralCommission(currentUserService.requireCurrentUser(), commissionId, servletRequest);
+    }
+
     @GetMapping("/api/admin/referrals/settings")
     public Object referralSettings() {
         return platformService.getReferralSettings();
     }
 
+    @GetMapping("/api/admin/referrals/preview")
+    public Object referralPreview(@RequestParam("investmentId") String investmentId) {
+        return platformService.previewReferralPayoutForInvestment(investmentId);
+    }
+
+    @PostMapping("/api/admin/referrals/simulate")
+    public Object referralSimulator(@RequestBody ApiDtos.ReferralPayoutSimulationRequest request) {
+        return platformService.simulateReferralPayout(request);
+    }
+
     @PutMapping("/api/admin/referrals/settings")
     public Object updateReferralSettings(@RequestBody ApiDtos.UpdateReferralSettingsRequest request, HttpServletRequest servletRequest) {
         return platformService.updateReferralSettings(currentUserService.requireCurrentUser(), request, servletRequest);
+    }
+
+    @PostMapping("/api/admin/wallet/adjust")
+    public Object adjustWallet(@RequestBody ApiDtos.AdminWalletAdjustmentRequest request, HttpServletRequest servletRequest) {
+        return platformService.adminAdjustWallet(currentUserService.requireCurrentUser(), request, servletRequest);
     }
 
     @GetMapping("/api/admin/users/{id}/360")

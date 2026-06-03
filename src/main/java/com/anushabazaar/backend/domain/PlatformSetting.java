@@ -2,6 +2,7 @@ package com.anushabazaar.backend.domain;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
 
 import java.time.LocalDateTime;
 
@@ -10,6 +11,7 @@ public class PlatformSetting {
 
     @Id
     private String settingKey;
+    @Lob
     private String settingValue;
     private LocalDateTime updatedAt;
     private String updatedBy;
