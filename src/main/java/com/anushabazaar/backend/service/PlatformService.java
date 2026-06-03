@@ -1606,18 +1606,18 @@ public class PlatformService {
                 })
                 .toList();
 
-        return Map.of(
-                "totalReferralUsers", relationships.stream().map(ReferralRelationship::getReferredUserId).collect(Collectors.toSet()).size(),
-                "activeLinks", relationships.stream().filter(ReferralRelationship::isActive).count(),
-                "totalRelationships", relationships.size(),
-                "totalCommissions", totalCommissions,
-                "creditedCommissions", creditedCommissions,
-                "instantCashbackPaid", instantCashbackPaid,
-                "monthlyReferralIncomePaid", monthlyReferralIncomePaid,
-                "skippedCommissions", skippedCommissions,
-                "levelSummary", levelSummary,
-                "topReferrers", topReferrers,
-                "recentRelationships", recentRelationships
+        return Map.ofEntries(
+                Map.entry("totalReferralUsers", relationships.stream().map(ReferralRelationship::getReferredUserId).collect(Collectors.toSet()).size()),
+                Map.entry("activeLinks", relationships.stream().filter(ReferralRelationship::isActive).count()),
+                Map.entry("totalRelationships", relationships.size()),
+                Map.entry("totalCommissions", totalCommissions),
+                Map.entry("creditedCommissions", creditedCommissions),
+                Map.entry("instantCashbackPaid", instantCashbackPaid),
+                Map.entry("monthlyReferralIncomePaid", monthlyReferralIncomePaid),
+                Map.entry("skippedCommissions", skippedCommissions),
+                Map.entry("levelSummary", levelSummary),
+                Map.entry("topReferrers", topReferrers),
+                Map.entry("recentRelationships", recentRelationships)
         );
     }
 
