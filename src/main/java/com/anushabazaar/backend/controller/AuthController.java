@@ -114,6 +114,12 @@ public class AuthController {
         return authService.resetPassword(request);
     }
 
+    @PostMapping("/reset-mpin")
+    public Map<String, Object> resetMpin(@Valid @RequestBody ApiDtos.ResetMpinRequest request,
+                                         HttpServletRequest servletRequest) {
+        return authService.resetMpin(request, servletRequest);
+    }
+
     @PostMapping("/change-password")
     public Map<String, Object> changePassword(@Valid @RequestBody ApiDtos.ChangePasswordRequest request) {
         return authService.changePassword(currentUserService.requireCurrentUser(), request);

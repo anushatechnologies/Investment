@@ -60,6 +60,7 @@ public class SecurityConfig {
                                 "/api/auth/refresh-token",
                                 "/api/auth/forgot-password",
                                 "/api/auth/reset-password",
+                                "/api/auth/reset-mpin",
                                 "/api/legal/**",
                                 "/api/files/view",
                                 "/api/payments/razorpay/webhook",

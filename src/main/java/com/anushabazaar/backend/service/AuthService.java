@@ -746,6 +746,28 @@ public class AuthService {
     }
 
     @Transactional
+    public Map<String, Object> resetMpin(ApiDtos.ResetMpinRequest request, HttpServletRequest servletRequest) {
+        TokenRecord record = tokenRecordRepository.findByTokenValueAndTokenTypeAndUsedFalse(request.token(), DomainEnums.TokenType.PASSWORD_RESET)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid reset token"));
+        if (record.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reset token expired");
+        }
+        if (isWeakMpin(request.mpin())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN cannot be a simple or repeated pattern");
+        }
+        User user = userRepository.findById(record.getUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        user.setMpinHash(passwordEncoder.encode(request.mpin()));
+        user.setOnboardingStatus(resolveMpinOnboardingStatus(user));
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        record.setUsed(true);
+        tokenRecordRepository.save(record);
+        auditService.log(user, "MPIN_RESET", "User", user.getId(), null, "MPIN_RESET", servletRequest);
+        return onboardingResponse(user, nextOnboardingStep(user), "MPIN reset successful");
+    }
+
+    @Transactional
     public Map<String, Object> changePassword(User user, ApiDtos.ChangePasswordRequest request) {
         if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current password is incorrect");

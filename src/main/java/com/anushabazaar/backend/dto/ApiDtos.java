@@ -46,6 +46,10 @@ public final class ApiDtos {
                                        @Size(min = 8) @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).+$") String newPassword) {
     }
 
+    public record ResetMpinRequest(@NotBlank String token,
+                                   @NotBlank @Pattern(regexp = "\\d{4,6}") String mpin) {
+    }
+
     public record ChangePasswordRequest(@NotBlank String currentPassword,
                                         @Size(min = 8) @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).+$") String newPassword) {
     }

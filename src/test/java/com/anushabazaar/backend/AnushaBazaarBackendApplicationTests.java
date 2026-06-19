@@ -93,6 +93,36 @@ class AnushaBazaarBackendApplicationTests {
     }
 
     @Test
+    void mobileOtpCanResetMpinForExistingUser() throws Exception {
+        registerVerifyAndLogin("forgot-mpin@example.com", "9948598352");
+
+        JsonNode sendOtp = postJsonWithoutAuth("/api/auth/send-otp", Map.of(
+                "mobileNumber", "+919948598352",
+                "channel", "MOBILE_OTP",
+                "type", "FORGOT_PASSWORD"
+        ));
+        JsonNode verifyOtp = postJsonWithoutAuth("/api/auth/verify-otp", Map.of(
+                "mobileNumber", "+919948598352",
+                "otp", sendOtp.get("otp").asText(),
+                "type", "FORGOT_PASSWORD"
+        ));
+
+        mockMvc.perform(post("/api/auth/reset-mpin")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("token", verifyOtp.get("resetToken").asText(), "mpin", "2580"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("MPIN reset successful"))
+                .andExpect(jsonPath("$.mpinCreated").value(true));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("mobileNumber", "9948598352", "mpin", "2580"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").exists())
+                .andExpect(jsonPath("$.mpinCreated").value(true));
+    }
+
+    @Test
     void fileViewServesUploadedFileInline() throws Exception {
         Path upload = Path.of("target/investment-test-uploads/kyc/test-image.png");
         Files.createDirectories(upload.getParent());
@@ -588,5 +618,3 @@ class AnushaBazaarBackendApplicationTests {
         return objectMapper.writeValueAsString(value);
     }
 }
-
-
