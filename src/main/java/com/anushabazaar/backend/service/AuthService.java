@@ -315,6 +315,19 @@ public class AuthService {
     @Transactional
     public Map<String, Object> verifyOtp(ApiDtos.VerifyOtpRequest request, HttpServletRequest servletRequest) {
         if (request.idToken() != null && !request.idToken().isBlank()) {
+            if (isForgotPasswordOtp(request.type())) {
+                FirebasePhoneAuthService.VerifiedFirebasePhone verifiedPhone =
+                        firebasePhoneAuthService.verifyPhoneToken(request.idToken());
+                User user = userRepository.findByMobileNumber(verifiedPhone.mobileNumber())
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+                TokenRecord resetToken = issueToken(user.getId(), DomainEnums.TokenType.PASSWORD_RESET, 1);
+                return Map.of(
+                        "message", "Phone OTP verified successfully",
+                        "verifiedStatus", "PASSWORD_RESET_VERIFIED",
+                        "resetToken", resetToken.getTokenValue(),
+                        "nextStep", "RESET_MPIN"
+                );
+            }
             return firebaseMobileLogin(new ApiDtos.FirebaseMobileLoginRequest(request.idToken()), servletRequest);
         }
         if (request.email() != null && !request.email().isBlank()) {
