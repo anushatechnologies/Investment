@@ -2,12 +2,14 @@ package com.anushabazaar.backend;
 
 import com.anushabazaar.backend.domain.Investment;
 import com.anushabazaar.backend.repository.InvestmentRepository;
+import com.anushabazaar.backend.service.FirebasePhoneAuthService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
@@ -23,6 +25,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -45,6 +48,9 @@ class AnushaBazaarBackendApplicationTests {
 
     @Autowired
     private InvestmentRepository investmentRepository;
+
+    @MockBean
+    private FirebasePhoneAuthService firebasePhoneAuthService;
 
     @Test
     void corsPreflightAllowsProductionFrontend() throws Exception {
@@ -122,6 +128,29 @@ class AnushaBazaarBackendApplicationTests {
                 .andExpect(jsonPath("$.mpinCreated").value(true));
     }
 
+    @Test
+    void firebasePhoneOtpCanResetMpinForExistingUser() throws Exception {
+        registerVerifyAndLogin("firebase-forgot-mpin@example.com", "9948598353");
+        given(firebasePhoneAuthService.verifyPhoneToken("firebase-reset-token"))
+                .willReturn(new FirebasePhoneAuthService.VerifiedFirebasePhone("firebase-user", "9948598353"));
+
+        JsonNode verifyOtp = postJsonWithoutAuth("/api/auth/verify-otp", Map.of(
+                "idToken", "firebase-reset-token",
+                "type", "FORGOT_PASSWORD"
+        ));
+
+        mockMvc.perform(post("/api/auth/reset-mpin")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("token", verifyOtp.get("resetToken").asText(), "mpin", "3690"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("MPIN reset successful"));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("mobileNumber", "9948598353", "mpin", "3690"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").exists());
+    }
     @Test
     void fileViewServesUploadedFileInline() throws Exception {
         Path upload = Path.of("target/investment-test-uploads/kyc/test-image.png");
