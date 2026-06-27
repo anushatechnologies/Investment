@@ -56,6 +56,10 @@ public class DatabaseSchemaRepair {
         repairColumn("interest_record", "status");
         repairColumn("fraud_alert", "alert_level");
         repairColumn("fraud_alert", "status");
+        dropCheckConstraint("notification", "notification_chk_1");
+        dropCheckConstraint("notification", "notification_chk_2");
+        dropCheckConstraint("notification", "notification_chk_3");
+        dropCheckConstraint("notification", "notification_chk_4");
         repairColumn("notification", "type");
         repairColumn("notification", "channel");
         repairTextColumn("notification", "message");
@@ -74,6 +78,15 @@ public class DatabaseSchemaRepair {
             log.info("Ensured {}.{} uses varchar storage", table, column);
         } catch (Exception ex) {
             log.warn("Could not repair {}.{} automatically: {}", table, column, ex.getMessage());
+        }
+    }
+
+    private void dropCheckConstraint(String table, String constraint) {
+        try {
+            jdbcTemplate.execute("ALTER TABLE " + table + " DROP CHECK " + constraint);
+            log.info("Dropped stale check constraint {}.{}", table, constraint);
+        } catch (Exception ex) {
+            log.debug("Check constraint {}.{} was not dropped: {}", table, constraint, ex.getMessage());
         }
     }
 
