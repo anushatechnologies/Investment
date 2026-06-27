@@ -3,6 +3,7 @@ package com.anushabazaar.backend.config;
 import com.anushabazaar.backend.dto.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -68,6 +69,13 @@ public class GlobalExceptionHandler {
                 "Multipart upload could not be processed",
                 request,
                 List.of(ex.getMessage() == null ? "Invalid multipart request" : ex.getMessage()));
+    }
+
+    @ExceptionHandler(DataAccessException.class)
+    public ResponseEntity<ApiErrorResponse> handleDataAccess(DataAccessException ex, HttpServletRequest request) {
+        Throwable root = ex.getRootCause() == null ? ex : ex.getRootCause();
+        String detail = root.getClass().getSimpleName() + (root.getMessage() == null ? "" : ": " + root.getMessage());
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "Database operation failed", request, List.of(detail));
     }
 
     @ExceptionHandler(Exception.class)
