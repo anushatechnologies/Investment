@@ -38,6 +38,13 @@ public class DatabaseSchemaRepair {
         repairColumn("kyc_submission", "aadhaar_back_status");
         repairColumn("kyc_submission", "selfie_status");
         repairColumn("kyc_submission", "bank_proof_status");
+        repairTextColumn("kyc_submission", "rejection_reason");
+        repairTextColumn("kyc_submission", "admin_notes");
+        repairTextColumn("kyc_submission", "pan_card_rejection_reason");
+        repairTextColumn("kyc_submission", "aadhaar_front_rejection_reason");
+        repairTextColumn("kyc_submission", "aadhaar_back_rejection_reason");
+        repairTextColumn("kyc_submission", "selfie_rejection_reason");
+        repairTextColumn("kyc_submission", "bank_proof_rejection_reason");
         repairColumn("investment", "status");
         repairColumn("payment_receipt", "payment_mode");
         repairColumn("payment_receipt", "verification_status");
@@ -51,7 +58,11 @@ public class DatabaseSchemaRepair {
         repairColumn("fraud_alert", "status");
         repairColumn("notification", "type");
         repairColumn("notification", "channel");
+        repairTextColumn("notification", "message");
         repairColumn("audit_log", "actor_role");
+        repairTextColumn("audit_log", "old_value");
+        repairTextColumn("audit_log", "new_value");
+        repairTextColumn("audit_log", "user_agent");
         repairColumn("coupon", "type");
         repairColumn("coupon", "status");
         repairColumn("coupon_redemption", "status");
@@ -61,6 +72,15 @@ public class DatabaseSchemaRepair {
         try {
             jdbcTemplate.execute("ALTER TABLE " + table + " MODIFY COLUMN " + column + " varchar(50)");
             log.info("Ensured {}.{} uses varchar storage", table, column);
+        } catch (Exception ex) {
+            log.warn("Could not repair {}.{} automatically: {}", table, column, ex.getMessage());
+        }
+    }
+
+    private void repairTextColumn(String table, String column) {
+        try {
+            jdbcTemplate.execute("ALTER TABLE " + table + " MODIFY COLUMN " + column + " text");
+            log.info("Ensured {}.{} uses text storage", table, column);
         } catch (Exception ex) {
             log.warn("Could not repair {}.{} automatically: {}", table, column, ex.getMessage());
         }
