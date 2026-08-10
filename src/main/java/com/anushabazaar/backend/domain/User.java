@@ -46,6 +46,8 @@ public class User {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String createdBy;
+    private boolean bankVerified;
+    private LocalDateTime bankVerifiedAt;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -105,4 +107,8 @@ public class User {
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     public String getCreatedBy() { return createdBy; }
     public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
+    public boolean isBankVerified() { return bankVerified; }
+    public void setBankVerified(boolean bankVerified) { this.bankVerified = bankVerified; }
+    public LocalDateTime getBankVerifiedAt() { return bankVerifiedAt; }
+    public void setBankVerifiedAt(LocalDateTime bankVerifiedAt) { this.bankVerifiedAt = bankVerifiedAt; }
 }

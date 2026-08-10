@@ -32,4 +32,21 @@ public class StorageService {
             throw new IllegalStateException("Failed to store file", ex);
         }
     }
+
+    public record StoredFile(org.springframework.core.io.Resource resource, String contentType, long contentLength) {}
+
+    public StoredFile loadForView(String pathStr) {
+        try {
+            Path file = Path.of(pathStr);
+            org.springframework.core.io.Resource resource = new org.springframework.core.io.UrlResource(file.toUri());
+            if (resource.exists() || resource.isReadable()) {
+                String contentType = Files.probeContentType(file);
+                long contentLength = Files.size(file);
+                return new StoredFile(resource, contentType, contentLength);
+            }
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "File not found");
+        } catch (Exception ex) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "File not found", ex);
+        }
+    }
 }

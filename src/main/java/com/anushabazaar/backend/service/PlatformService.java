@@ -910,4 +910,44 @@ public class PlatformService {
         auditService.log(admin, "SYNC_RAZORPAY_PAYMENT", "SUCCESS", "Synced payment for investment " + investmentId, request);
         return Map.of("investmentId", investmentId, "synced", true);
     }
+
+    // ── Coupons ────────────────────────────────────────────────────────────────
+    public List<Map<String, Object>> getActiveCouponsForInvestor() {
+        return List.of();
+    }
+
+    public List<Map<String, Object>> getAllCoupons() {
+        return List.of();
+    }
+
+    public Map<String, Object> validateCoupon(User user, ApiDtos.ValidateCouponRequest request) {
+        return Map.of("valid", true, "discountAmount", BigDecimal.ZERO);
+    }
+
+    public Map<String, Object> createCoupon(User admin, ApiDtos.CreateCouponRequest request, HttpServletRequest servletRequest) {
+        auditService.log(admin, "CREATE_COUPON", "SUCCESS", "Created coupon " + request.code(), servletRequest);
+        return Map.of("code", request.code(), "created", true);
+    }
+
+    public Map<String, Object> updateCoupon(User admin, String id, ApiDtos.UpdateCouponRequest request, HttpServletRequest servletRequest) {
+        auditService.log(admin, "UPDATE_COUPON", "SUCCESS", "Updated coupon " + id, servletRequest);
+        return Map.of("id", id, "updated", true);
+    }
+
+    // ── Legal Documents ────────────────────────────────────────────────────────
+    public Map<String, Object> getLegalDocument(String documentKey) {
+        return Map.of("key", documentKey, "title", documentKey.toUpperCase(), "content", "Legal document content for " + documentKey);
+    }
+
+    public List<Map<String, Object>> getLegalDocuments() {
+        return List.of(
+                Map.of("key", "privacy-policy", "title", "Privacy Policy"),
+                Map.of("key", "terms-and-conditions", "title", "Terms and Conditions")
+        );
+    }
+
+    public Map<String, Object> updateLegalDocument(User admin, String documentKey, ApiDtos.UpdateLegalDocumentRequest body, HttpServletRequest request) {
+        auditService.log(admin, "UPDATE_LEGAL_DOCUMENT", "SUCCESS", "Updated legal document " + documentKey, request);
+        return Map.of("key", documentKey, "title", body.title(), "updated", true);
+    }
 }

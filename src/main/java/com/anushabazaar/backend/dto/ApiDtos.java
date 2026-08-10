@@ -113,6 +113,18 @@ public final class ApiDtos {
     ) {
     }
 
+    public record ValidateCouponRequest(String code, BigDecimal amount) {
+    }
+
+    public record CreateCouponRequest(String code, String title, String type, BigDecimal valueAmount, BigDecimal minimumInvestmentAmount) {
+    }
+
+    public record UpdateCouponRequest(String title, String type, BigDecimal valueAmount, String status) {
+    }
+
+    public record UpdateLegalDocumentRequest(String title, String summary, String content, String effectiveDate) {
+    }
+
     public record ReceiptStatusDetails(
             String receiptNumber,
             String receiptUrl,
