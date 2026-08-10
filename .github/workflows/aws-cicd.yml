@@ -171,6 +171,12 @@ jobs:
           META_WEBHOOK_VERIFY_TOKEN=$META_WEBHOOK_VERIFY_TOKEN
           META_WHATSAPP_ENABLED=$META_WHATSAPP_ENABLED
           EOF
+          # Strip leading whitespace from all lines (caused by YAML heredoc indentation)
+          sed -i 's/^[[:space:]]*//' runtime.env
+          # Verify the file looks correct
+          echo "=== runtime.env preview (first 5 lines) ==="
+          head -5 runtime.env
+
 
       - name: Copy runtime env file to EC2
         run: |
