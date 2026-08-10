@@ -56,7 +56,13 @@ app:
     access-expiry-hours: 24
     refresh-expiry-days: 7
   file-storage:
-    root: uploads
+    root: ${APP_FILE_STORAGE_ROOT:uploads}
+    mode: ${APP_FILE_STORAGE_MODE:local}
+    s3-access-key: ${APP_FILE_STORAGE_S3_ACCESS_KEY:}
+    s3-region: ${APP_FILE_STORAGE_S3_REGION:ap-south-1}
+    s3-bucket: ${APP_FILE_STORAGE_S3_BUCKET:}
+    s3-secret-key: ${APP_FILE_STORAGE_S3_SECRET_KEY:}
+    fallback-to-local: ${APP_FILE_STORAGE_FALLBACK_TO_LOCAL:false}
   whatsapp:
     phone-number-id: ${META_PHONE_NUMBER_ID:mock_phone_number_id}
     access-token: ${META_ACCESS_TOKEN:mock_access_token}
