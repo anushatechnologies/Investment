@@ -19,7 +19,7 @@ class StorageServiceTest {
                 "s3",
                 "",
                 "ap-south-1",
-                "anushabazaar",
+                "",
                 "",
                 false
         );
@@ -45,7 +45,7 @@ class StorageServiceTest {
                 "s3",
                 "",
                 "ap-south-1",
-                "anushabazaar",
+                "",
                 "",
                 true
         );
