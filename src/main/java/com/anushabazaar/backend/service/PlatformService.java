@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -85,7 +86,7 @@ public class PlatformService {
 
     @Transactional
     public KycSubmission submitKyc(User user, MultipartFile panCard, MultipartFile aadhaarFront, MultipartFile aadhaarBack,
-                                   MultipartFile selfiePhoto, MultipartFile bankProof, HttpServletRequest request) {
+                                   MultipartFile selfiePhoto, MultipartFile bankProof, HttpServletRequest request) throws IOException {
         KycSubmission kyc = kycSubmissionRepository.findTopByUserIdOrderBySubmittedAtDesc(user.getId()).orElseGet(KycSubmission::new);
         kyc.setId(kyc.getId() == null ? UUID.randomUUID().toString() : kyc.getId());
         kyc.setUserId(user.getId());
@@ -252,7 +253,7 @@ public class PlatformService {
     @Transactional
     public PaymentReceipt uploadReceipt(User user, String investmentId, MultipartFile receiptFile, BigDecimal paymentAmount,
                                         LocalDate paymentDate, DomainEnums.PaymentMode paymentMode, String bankReference,
-                                        HttpServletRequest request) {
+                                        HttpServletRequest request) throws IOException {
         Investment investment = getInvestment(investmentId);
         if (!investment.getInvestorUserId().equals(user.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your investment");

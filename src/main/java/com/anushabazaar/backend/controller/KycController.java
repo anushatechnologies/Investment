@@ -7,6 +7,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.Map;
 
 @RestController
@@ -28,7 +29,7 @@ public class KycController {
                          @RequestParam("aadhaarBackImage") MultipartFile aadhaarBackImage,
                          @RequestParam("selfiePhoto") MultipartFile selfiePhoto,
                          @RequestParam("bankPassbookOrStatement") MultipartFile bankPassbookOrStatement,
-                         HttpServletRequest request) {
+                         HttpServletRequest request) throws IOException {
         return platformService.submitKyc(currentUserService.requireCurrentUser(), panCardImage, aadhaarFrontImage, aadhaarBackImage, selfiePhoto, bankPassbookOrStatement, request);
     }
 

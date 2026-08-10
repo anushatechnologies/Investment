@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
+import java.io.IOException;
 import java.time.LocalDate;
 
 @RestController
@@ -38,7 +39,7 @@ public class InvestmentController {
                                 @RequestParam("paymentDate") LocalDate paymentDate,
                                 @RequestParam("paymentMode") DomainEnums.PaymentMode paymentMode,
                                 @RequestParam("bankReference") String bankReference,
-                                HttpServletRequest request) {
+                                HttpServletRequest request) throws IOException {
         return platformService.uploadReceipt(currentUserService.requireCurrentUser(), id, receiptFile, paymentAmount, paymentDate, paymentMode, bankReference, request);
     }
 
