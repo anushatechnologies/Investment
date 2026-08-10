@@ -816,10 +816,6 @@ public class PlatformService {
     }
 
     // ── Notifications ──────────────────────────────────────────────────────────
-    public List<Notification> getNotifications(User user) {
-        return notificationRepository.findByUserIdOrderBySentAtDesc(user.getId());
-    }
-
     public Map<String, Object> getNotificationPreferences(User user) {
         return Map.of("email", true, "whatsapp", true, "sms", true, "push", true);
     }
@@ -833,18 +829,6 @@ public class PlatformService {
         List<Notification> list = notificationRepository.findByUserIdOrderBySentAtDesc(user.getId());
         long unreadCount = list.stream().filter(n -> !n.isReadFlag()).count();
         return Map.of("total", list.size(), "unread", unreadCount);
-    }
-
-    public Map<String, Object> markNotificationRead(User user, String id, HttpServletRequest request) {
-        Notification notification = notificationRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification not found"));
-        if (!notification.getUserId().equals(user.getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
-        }
-        notification.setReadFlag(true);
-        notification.setReadAt(LocalDateTime.now());
-        notificationRepository.save(notification);
-        return Map.of("message", "Notification marked as read");
     }
 
     public Map<String, Object> markAllNotificationsRead(User user, HttpServletRequest request) {
@@ -872,7 +856,7 @@ public class PlatformService {
 
     // ── Razorpay Integration ───────────────────────────────────────────────────
     public Map<String, Object> createRazorpayCheckoutOrder(User user, ApiDtos.ApplyInvestmentRequest request, HttpServletRequest servletRequest) {
-        Map<String, Object> response = applyForInvestment(user, request, servletRequest);
+        Investment response = applyInvestment(user, request, servletRequest);
         return Map.of(
                 "orderId", "order_" + UUID.randomUUID().toString().replace("-", "").substring(0, 14),
                 "currency", "INR",

@@ -66,4 +66,7 @@ public class Investment {
     public void setNotes(String notes) { this.notes = notes; }
     public boolean isReceiptApproved() { return receiptApproved; }
     public void setReceiptApproved(boolean receiptApproved) { this.receiptApproved = receiptApproved; }
+    public String getUserId() { return investorUserId; }
+    public String getInvestorId() { return investorUserId; }
+    public BigDecimal getAmount() { return investmentAmount; }
 }

@@ -143,4 +143,36 @@ public final class DomainEnums {
         DELIVERED,
         FAILED
     }
+
+    public enum CouponType {
+        FLAT_CASHBACK,
+        PERCENTAGE_DISCOUNT,
+        BONUS_INTEREST
+    }
+
+    public enum CouponStatus {
+        ACTIVE,
+        INACTIVE,
+        EXPIRED
+    }
+
+    public enum CouponRedemptionStatus {
+        APPLIED,
+        REDEEMED,
+        CANCELLED
+    }
+
+    public enum SupportTicketPriority {
+        LOW,
+        MEDIUM,
+        HIGH,
+        URGENT
+    }
+
+    public enum SupportTicketStatus {
+        OPEN,
+        IN_PROGRESS,
+        RESOLVED,
+        CLOSED
+    }
 }

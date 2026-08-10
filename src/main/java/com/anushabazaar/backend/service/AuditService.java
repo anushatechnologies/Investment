@@ -35,6 +35,10 @@ public class AuditService {
         auditLogRepository.save(log);
     }
 
+    public void log(User actor, String action, String status, String details, HttpServletRequest request) {
+        log(actor, action, "SYSTEM", action, status, details, request);
+    }
+
     public void logSystem(String action, String entityType, String entityId, String newValue) {
         AuditLog log = new AuditLog();
         log.setId(UUID.randomUUID().toString());

@@ -134,6 +134,15 @@ public final class ApiDtos {
     ) {
     }
 
+    public record VerifyBankRequest(
+            String accountHolderName,
+            String bankAccountNumber,
+            String confirmBankAccountNumber,
+            String bankIfscCode,
+            String bankName
+    ) {
+    }
+
     public record ReceiptStatusResponse(
             String paymentStatus,
             String investmentId,
