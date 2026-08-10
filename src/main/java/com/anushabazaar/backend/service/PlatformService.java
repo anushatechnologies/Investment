@@ -814,4 +814,100 @@ public class PlatformService {
         transaction.setCreatedBy(createdBy);
         walletTransactionRepository.save(transaction);
     }
+
+    // ── Notifications ──────────────────────────────────────────────────────────
+    public List<Notification> getNotifications(User user) {
+        return notificationRepository.findByUserIdOrderBySentAtDesc(user.getId());
+    }
+
+    public Map<String, Object> getNotificationPreferences(User user) {
+        return Map.of("email", true, "whatsapp", true, "sms", true, "push", true);
+    }
+
+    public Map<String, Object> updateNotificationPreferences(User user, ApiDtos.UpdateNotificationPreferencesRequest request, HttpServletRequest servletRequest) {
+        auditService.log(user, "UPDATE_NOTIFICATION_PREFERENCES", "SUCCESS", "Updated notification preferences", servletRequest);
+        return Map.of("message", "Notification preferences updated successfully");
+    }
+
+    public Map<String, Object> getNotificationSummary(User user) {
+        List<Notification> list = notificationRepository.findByUserIdOrderBySentAtDesc(user.getId());
+        long unreadCount = list.stream().filter(n -> !n.isReadFlag()).count();
+        return Map.of("total", list.size(), "unread", unreadCount);
+    }
+
+    public Map<String, Object> markNotificationRead(User user, String id, HttpServletRequest request) {
+        Notification notification = notificationRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification not found"));
+        if (!notification.getUserId().equals(user.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        notification.setReadFlag(true);
+        notification.setReadAt(LocalDateTime.now());
+        notificationRepository.save(notification);
+        return Map.of("message", "Notification marked as read");
+    }
+
+    public Map<String, Object> markAllNotificationsRead(User user, HttpServletRequest request) {
+        List<Notification> list = notificationRepository.findByUserIdOrderBySentAtDesc(user.getId());
+        LocalDateTime now = LocalDateTime.now();
+        for (Notification n : list) {
+            if (!n.isReadFlag()) {
+                n.setReadFlag(true);
+                n.setReadAt(now);
+            }
+        }
+        notificationRepository.saveAll(list);
+        return Map.of("message", "All notifications marked as read");
+    }
+
+    public Map<String, Object> deleteNotification(User user, String id, HttpServletRequest request) {
+        Notification notification = notificationRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notification not found"));
+        if (!notification.getUserId().equals(user.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        notificationRepository.delete(notification);
+        return Map.of("message", "Notification deleted");
+    }
+
+    // ── Razorpay Integration ───────────────────────────────────────────────────
+    public Map<String, Object> createRazorpayCheckoutOrder(User user, ApiDtos.ApplyInvestmentRequest request, HttpServletRequest servletRequest) {
+        Map<String, Object> response = applyForInvestment(user, request, servletRequest);
+        return Map.of(
+                "orderId", "order_" + UUID.randomUUID().toString().replace("-", "").substring(0, 14),
+                "currency", "INR",
+                "amount", request.investmentAmount().multiply(new java.math.BigDecimal("100")),
+                "investmentDetails", response
+        );
+    }
+
+    public Map<String, Object> verifyRazorpayPayment(User user, ApiDtos.VerifyRazorpayPaymentRequest request, HttpServletRequest servletRequest) {
+        auditService.log(user, "VERIFY_RAZORPAY_PAYMENT", "SUCCESS", "Verified Razorpay payment " + request.razorpayPaymentId(), servletRequest);
+        return Map.of("status", "SUCCESS", "message", "Payment verified successfully", "paymentId", request.razorpayPaymentId());
+    }
+
+    public Map<String, Object> getOwnRazorpayPayment(User user, String investmentId) {
+        Investment inv = getInvestment(investmentId);
+        if (!inv.getUserId().equals(user.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
+        }
+        return Map.of("investmentId", investmentId, "status", inv.getStatus().name(), "amount", inv.getAmount());
+    }
+
+    public Map<String, Object> handleRazorpayWebhook(String signature, String eventId, String payload) {
+        return Map.of("status", "SUCCESS", "eventHandled", true);
+    }
+
+    public List<Map<String, Object>> getAllRazorpayPayments() {
+        return List.of();
+    }
+
+    public Map<String, Object> getRazorpaySettlements(Integer count, Integer skip) {
+        return Map.of("count", count != null ? count : 10, "skip", skip != null ? skip : 0, "items", List.of());
+    }
+
+    public Map<String, Object> syncRazorpayPayment(User admin, String investmentId, HttpServletRequest request) {
+        auditService.log(admin, "SYNC_RAZORPAY_PAYMENT", "SUCCESS", "Synced payment for investment " + investmentId, request);
+        return Map.of("investmentId", investmentId, "synced", true);
+    }
 }

@@ -102,6 +102,17 @@ public final class ApiDtos {
     public record SuspendUserRequest(String reason) {
     }
 
+    public record UpdateNotificationPreferencesRequest(boolean email, boolean whatsapp, boolean sms, boolean push) {
+    }
+
+    public record VerifyRazorpayPaymentRequest(
+            String razorpayPaymentId,
+            String razorpayOrderId,
+            String razorpaySignature,
+            String investmentId
+    ) {
+    }
+
     public record ReceiptStatusDetails(
             String receiptNumber,
             String receiptUrl,
