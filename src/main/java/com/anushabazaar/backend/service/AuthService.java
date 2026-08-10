@@ -277,5 +277,23 @@ public class AuthService {
                 referralRelationshipRepository.save(relationship);
             }
         });
+    @Transactional
+    public Map<String, Object> verifyBank(User user, ApiDtos.VerifyBankRequest request, HttpServletRequest servletRequest) {
+        user.setBankAccountNumber(request.bankAccountNumber());
+        user.setBankIfscCode(request.bankIfscCode());
+        user.setBankName(request.bankName());
+        user.setBankVerified(true);
+        user.setBankVerifiedAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        auditService.log(user, "BANK_VERIFIED", "User", user.getId(), null, request.bankAccountNumber(), servletRequest);
+        return Map.of(
+                "status", "VERIFIED",
+                "message", "Bank details verified and linked successfully",
+                "accountHolderName", user.getFullName(),
+                "bankAccountNumber", request.bankAccountNumber(),
+                "bankIfscCode", request.bankIfscCode(),
+                "bankName", request.bankName()
+        );
     }
 }
