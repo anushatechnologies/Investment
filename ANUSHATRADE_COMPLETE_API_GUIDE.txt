@@ -1,0 +1,1138 @@
+ANUSHATRADE COMPLETE API GUIDE
+Base URL: https://api.anusgatrade.com
+
+NOTE:
+- Use this exact base URL only if your deployed domain is "api.anusgatrade.com".
+- If your real domain is "api.anushatrade.com", replace the base URL everywhere.
+
+AUTH HEADER FOR PROTECTED APIS:
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+
+ROLES:
+- Public APIs: no token required
+- Investor APIs: require INVESTOR accessToken
+- Admin APIs: require ADMIN or SUPER_ADMIN accessToken
+
+COMMON LOGIN RESPONSE:
+{
+  "accessToken": "...",
+  "refreshToken": "...",
+  "role": "INVESTOR",
+  "userId": "..."
+}
+
+============================================================
+1. PUBLIC / AUTH APIS
+============================================================
+
+1.1 SEND EMAIL OTP FOR SIGNUP
+POST https://api.anusgatrade.com/api/auth/send-otp
+
+Request:
+{
+  "email": "user@example.com"
+}
+
+Production Response:
+{
+  "provider": "EMAIL_OTP",
+  "message": "Email OTP sent.",
+  "email": "user@example.com",
+  "expiresInMinutes": 10,
+  "nextStep": "VERIFY_OTP"
+}
+
+Development Response may include:
+{
+  "otp": "123456"
+}
+
+------------------------------------------------------------
+
+1.2 SEND MOBILE OTP FOR SIGNUP WITHOUT FIREBASE
+POST https://api.anusgatrade.com/api/auth/send-otp
+
+Request:
+{
+  "mobileNumber": "9876543210",
+  "countryCode": "+91",
+  "channel": "MOBILE_OTP",
+  "useFirebase": false
+}
+
+Response:
+{
+  "provider": "MOBILE_OTP",
+  "message": "Mobile OTP generated. Send this OTP using your SMS provider.",
+  "phoneNumber": "+919876543210",
+  "mobileNumber": "9876543210",
+  "expiresInMinutes": 10,
+  "nextStep": "VERIFY_OTP"
+}
+
+------------------------------------------------------------
+
+1.3 SEND MOBILE OTP USING FIREBASE
+POST https://api.anusgatrade.com/api/auth/send-otp
+
+Request:
+{
+  "mobileNumber": "9876543210",
+  "countryCode": "+91"
+}
+
+Response:
+{
+  "provider": "FIREBASE_PHONE_AUTH",
+  "message": "Send OTP from frontend using Firebase Phone Auth.",
+  "phoneNumber": "+919876543210",
+  "mobileNumber": "9876543210",
+  "userExists": false,
+  "nextStep": "VERIFY_OTP"
+}
+
+------------------------------------------------------------
+
+1.4 VERIFY EMAIL OTP
+POST https://api.anusgatrade.com/api/auth/verify-otp
+
+Request:
+{
+  "email": "user@example.com",
+  "otp": "123456"
+}
+
+Response:
+{
+  "message": "OTP verified successfully",
+  "verifiedStatus": "EMAIL_VERIFIED",
+  "signupVerificationToken": "...",
+  "nextStep": "REGISTER"
+}
+
+Use signupVerificationToken in /api/auth/register.
+
+------------------------------------------------------------
+
+1.5 VERIFY MOBILE OTP WITHOUT FIREBASE
+POST https://api.anusgatrade.com/api/auth/verify-otp
+
+Request:
+{
+  "mobileNumber": "9876543210",
+  "otp": "123456"
+}
+
+Response:
+{
+  "message": "OTP verified successfully",
+  "verifiedStatus": "MOBILE_VERIFIED",
+  "signupVerificationToken": "...",
+  "nextStep": "REGISTER"
+}
+
+------------------------------------------------------------
+
+1.6 VERIFY FIREBASE MOBILE TOKEN
+POST https://api.anusgatrade.com/api/auth/verify-otp
+
+Request:
+{
+  "idToken": "<firebase-phone-id-token>"
+}
+
+Existing user response includes tokens.
+New user response:
+{
+  "userExists": false,
+  "nextStep": "REGISTER",
+  "mobileNumber": "9876543210",
+  "firebaseUid": "...",
+  "message": "Mobile verified. Complete registration to create investor account."
+}
+
+------------------------------------------------------------
+
+1.7 REGISTER USER
+POST https://api.anusgatrade.com/api/auth/register
+
+Request:
+{
+  "fullName": "Test User",
+  "email": "user@example.com",
+  "mobileNumber": "9876543210",
+  "password": "Password@123",
+  "dateOfBirth": "1995-01-01",
+  "panNumber": "ABCDE1234F",
+  "aadhaarLast4": "1234",
+  "address": "Hyderabad",
+  "bankAccountNumber": "1234567890",
+  "bankIfscCode": "SBIN0001234",
+  "bankName": "State Bank of India",
+  "referredByCode": "ABC12345",
+  "signupVerificationToken": "<token-from-verify-otp>",
+  "riskDisclosureAccepted": true,
+  "investorAgreementAccepted": true
+}
+
+Response:
+{
+  "message": "Registration successful. Verify email, then complete KYC and bank linking.",
+  "verificationToken": "...",
+  "userId": "..."
+}
+
+Validation:
+- password min 8 chars and must include uppercase, lowercase, number, special char
+- mobileNumber must be 10 digits
+- aadhaarLast4 must be 4 digits
+
+------------------------------------------------------------
+
+1.8 VERIFY EMAIL LINK
+GET https://api.anusgatrade.com/api/auth/verify-email?token=<verificationToken>
+
+Response:
+{
+  "message": "Email verified successfully"
+}
+
+------------------------------------------------------------
+
+1.9 LOGIN WITH EMAIL AND PASSWORD
+POST https://api.anusgatrade.com/api/auth/login
+
+Request:
+{
+  "email": "user@example.com",
+  "password": "Password@123"
+}
+
+Response:
+{
+  "accessToken": "...",
+  "refreshToken": "...",
+  "role": "INVESTOR",
+  "userId": "..."
+}
+
+------------------------------------------------------------
+
+1.10 LOGIN WITH MOBILE AND MPIN
+POST https://api.anusgatrade.com/api/auth/login
+
+Request:
+{
+  "mobileNumber": "9876543210",
+  "mpin": "135790"
+}
+
+Response:
+{
+  "accessToken": "...",
+  "refreshToken": "...",
+  "role": "INVESTOR",
+  "userId": "...",
+  "kycStatus": "APPROVED",
+  "accountStatus": "ACTIVE",
+  "onboardingStatus": "ACTIVE",
+  "bankVerified": true,
+  "mpinCreated": true
+}
+
+------------------------------------------------------------
+
+1.11 REFRESH TOKEN
+POST https://api.anusgatrade.com/api/auth/refresh-token
+
+Request:
+{
+  "refreshToken": "..."
+}
+
+Response:
+{
+  "accessToken": "..."
+}
+
+------------------------------------------------------------
+
+1.12 FORGOT PASSWORD
+POST https://api.anusgatrade.com/api/auth/forgot-password
+
+Request by email:
+{
+  "email": "user@example.com"
+}
+
+Request by mobile:
+{
+  "mobileNumber": "9876543210"
+}
+
+Production Response:
+{
+  "message": "Password reset email sent"
+}
+
+Development Response may include:
+{
+  "resetToken": "...",
+  "resetLink": "http://localhost:3000/reset-password?token=..."
+}
+
+------------------------------------------------------------
+
+1.13 RESET PASSWORD
+POST https://api.anusgatrade.com/api/auth/reset-password
+
+Request:
+{
+  "token": "<resetToken>",
+  "newPassword": "NewPassword@123"
+}
+
+Response:
+{
+  "message": "Password reset successful"
+}
+
+============================================================
+2. AUTHENTICATED USER / ONBOARDING APIS
+============================================================
+
+2.1 SET MPIN
+POST https://api.anusgatrade.com/api/auth/set-mpin
+Authorization: Bearer <accessToken>
+
+Request:
+{
+  "mpin": "135790"
+}
+
+Response:
+{
+  "message": "MPIN created successfully",
+  "nextStep": "OPEN_DASHBOARD",
+  "userId": "...",
+  "accountStatus": "ACTIVE",
+  "onboardingStatus": "ACTIVE",
+  "kycStatus": "APPROVED",
+  "bankVerified": true,
+  "mpinCreated": true,
+  "biometricEnabled": false
+}
+
+------------------------------------------------------------
+
+2.2 VERIFY MPIN
+POST https://api.anusgatrade.com/api/auth/verify-mpin
+Authorization: Bearer <accessToken>
+
+Request:
+{
+  "mpin": "135790"
+}
+
+Response:
+{
+  "accessToken": "...",
+  "refreshToken": "...",
+  "role": "INVESTOR",
+  "userId": "..."
+}
+
+------------------------------------------------------------
+
+2.3 ENABLE OR DISABLE BIOMETRIC
+POST https://api.anusgatrade.com/api/auth/enable-biometric
+Authorization: Bearer <accessToken>
+
+Request enable:
+{
+  "deviceId": "device-123",
+  "enabled": true
+}
+
+Request disable:
+{
+  "deviceId": "device-123",
+  "enabled": false
+}
+
+------------------------------------------------------------
+
+2.4 ACTIVATE ACCOUNT
+POST https://api.anusgatrade.com/api/auth/activate
+Authorization: Bearer <accessToken>
+
+Request:
+{}
+
+Rules:
+- Terms accepted
+- KYC approved by admin
+- Bank account linked
+
+Response:
+{
+  "message": "Account activated successfully",
+  "nextStep": "SET_MPIN"
+}
+
+------------------------------------------------------------
+
+2.5 LOGOUT
+POST https://api.anusgatrade.com/api/auth/logout
+Authorization: Bearer <accessToken>
+
+Response:
+{
+  "message": "Logged out successfully"
+}
+
+------------------------------------------------------------
+
+2.6 CHANGE PASSWORD
+POST https://api.anusgatrade.com/api/auth/change-password
+Authorization: Bearer <accessToken>
+
+Request:
+{
+  "currentPassword": "Password@123",
+  "newPassword": "NewPassword@123"
+}
+
+Response:
+{
+  "message": "Password updated successfully"
+}
+
+============================================================
+3. KYC APIS - INVESTOR
+============================================================
+
+3.1 SUBMIT COMPLETE KYC IN ONE REQUEST
+POST https://api.anusgatrade.com/api/kyc/submit
+Authorization: Bearer <accessToken>
+Content-Type: multipart/form-data
+
+Form-data fields:
+panCardImage: file
+aadhaarFrontImage: file
+aadhaarBackImage: file
+selfiePhoto: file
+bankPassbookOrStatement: file
+panNumber: ABCDE1234F
+aadhaarLast4: 1234
+dateOfBirth: 1995-01-01
+address: Hyderabad
+
+curl example:
+curl -X POST "https://api.anusgatrade.com/api/kyc/submit" \
+  -H "Authorization: Bearer <accessToken>" \
+  -F "panCardImage=@pan.jpg" \
+  -F "aadhaarFrontImage=@aadhaar-front.jpg" \
+  -F "aadhaarBackImage=@aadhaar-back.jpg" \
+  -F "selfiePhoto=@selfie.jpg" \
+  -F "bankPassbookOrStatement=@bank.jpg" \
+  -F "panNumber=ABCDE1234F" \
+  -F "aadhaarLast4=1234" \
+  -F "dateOfBirth=1995-01-01" \
+  -F "address=Hyderabad"
+
+------------------------------------------------------------
+
+3.2 PAN VERIFY / UPLOAD PAN
+POST https://api.anusgatrade.com/api/kyc/pan-verify
+Authorization: Bearer <accessToken>
+Content-Type: multipart/form-data
+
+Form-data:
+panCardImage: file
+panNumber: ABCDE1234F
+
+curl:
+curl -X POST "https://api.anusgatrade.com/api/kyc/pan-verify" \
+  -H "Authorization: Bearer <accessToken>" \
+  -F "panCardImage=@pan.jpg" \
+  -F "panNumber=ABCDE1234F"
+
+------------------------------------------------------------
+
+3.3 AADHAAR VERIFY / UPLOAD AADHAAR
+POST https://api.anusgatrade.com/api/kyc/aadhaar-verify
+Authorization: Bearer <accessToken>
+Content-Type: multipart/form-data
+
+Form-data:
+aadhaarFrontImage: file
+aadhaarBackImage: file
+aadhaarNumber: 123412341234
+aadhaarLast4: 1234
+address: Hyderabad
+
+curl:
+curl -X POST "https://api.anusgatrade.com/api/kyc/aadhaar-verify" \
+  -H "Authorization: Bearer <accessToken>" \
+  -F "aadhaarFrontImage=@aadhaar-front.jpg" \
+  -F "aadhaarBackImage=@aadhaar-back.jpg" \
+  -F "aadhaarNumber=123412341234" \
+  -F "address=Hyderabad"
+
+------------------------------------------------------------
+
+3.4 UPLOAD SELFIE
+POST https://api.anusgatrade.com/api/kyc/upload-selfie
+Authorization: Bearer <accessToken>
+Content-Type: multipart/form-data
+
+Form-data:
+selfiePhoto: file
+
+curl:
+curl -X POST "https://api.anusgatrade.com/api/kyc/upload-selfie" \
+  -H "Authorization: Bearer <accessToken>" \
+  -F "selfiePhoto=@selfie.jpg"
+
+------------------------------------------------------------
+
+3.5 GET KYC STATUS
+GET https://api.anusgatrade.com/api/kyc/status
+Authorization: Bearer <accessToken>
+
+Response:
+{
+  "kycStatus": "PENDING",
+  "submission": {
+    "id": "...",
+    "status": "PENDING",
+    "panCardStatus": "PENDING",
+    "aadhaarFrontStatus": "PENDING",
+    "aadhaarBackStatus": "PENDING",
+    "selfieStatus": "PENDING"
+  }
+}
+
+============================================================
+4. BANK APIS - INVESTOR
+============================================================
+
+4.1 LINK BANK ACCOUNT
+POST https://api.anusgatrade.com/api/bank/link
+Authorization: Bearer <accessToken>
+
+Request:
+{
+  "accountHolderName": "Test User",
+  "bankAccountNumber": "1234567890",
+  "confirmBankAccountNumber": "1234567890",
+  "bankIfscCode": "SBIN0001234",
+  "bankName": "State Bank of India"
+}
+
+Response:
+{
+  "message": "Bank account linked successfully",
+  "nextStep": "ACTIVATE_ACCOUNT",
+  "bankVerified": true
+}
+
+Rules:
+- KYC must be APPROVED before bank linking.
+- bankAccountNumber and confirmBankAccountNumber must match.
+
+------------------------------------------------------------
+
+4.2 VERIFY BANK ACCOUNT
+POST https://api.anusgatrade.com/api/bank/verify
+Authorization: Bearer <accessToken>
+
+Same request body as /api/bank/link.
+
+------------------------------------------------------------
+
+4.3 GET BANK DETAILS
+GET https://api.anusgatrade.com/api/bank/details
+Authorization: Bearer <accessToken>
+
+Response:
+{
+  "accountHolderName": "Test User",
+  "bankAccountNumber": "1234567890",
+  "bankIfscCode": "SBIN0001234",
+  "bankName": "State Bank of India",
+  "bankVerified": true,
+  "bankVerifiedAt": "2026-05-20T10:00:00"
+}
+
+============================================================
+5. PLANS AND INVESTMENTS - INVESTOR
+============================================================
+
+5.1 GET ACTIVE PLANS
+GET https://api.anusgatrade.com/api/plans
+Authorization: Bearer <accessToken>
+
+------------------------------------------------------------
+
+5.2 APPLY INVESTMENT
+POST https://api.anusgatrade.com/api/investments/apply
+Authorization: Bearer <accessToken>
+
+Request:
+{
+  "investmentPlanId": "plan-id",
+  "investmentAmount": 100000
+}
+
+Response:
+{
+  "id": "investment-id",
+  "status": "PENDING_RECEIPT"
+}
+
+------------------------------------------------------------
+
+5.3 UPLOAD PAYMENT RECEIPT
+POST https://api.anusgatrade.com/api/investments/{investmentId}/upload-receipt
+Authorization: Bearer <accessToken>
+Content-Type: multipart/form-data
+
+Form-data:
+receiptFile: file
+paymentAmount: 100000
+paymentDate: 2026-05-20
+paymentMode: NEFT
+bankReference: UTR123456
+
+Allowed paymentMode:
+NEFT, RTGS, IMPS, UPI, CASH
+
+curl:
+curl -X POST "https://api.anusgatrade.com/api/investments/investment-id/upload-receipt" \
+  -H "Authorization: Bearer <accessToken>" \
+  -F "receiptFile=@receipt.jpg" \
+  -F "paymentAmount=100000" \
+  -F "paymentDate=2026-05-20" \
+  -F "paymentMode=NEFT" \
+  -F "bankReference=UTR123456"
+
+------------------------------------------------------------
+
+5.4 GET OWN INVESTMENTS
+GET https://api.anusgatrade.com/api/investments
+Authorization: Bearer <accessToken>
+
+------------------------------------------------------------
+
+5.5 GET OWN INVESTMENT BY ID
+GET https://api.anusgatrade.com/api/investments/{investmentId}
+Authorization: Bearer <accessToken>
+
+------------------------------------------------------------
+
+5.6 CANCEL INVESTMENT
+POST https://api.anusgatrade.com/api/investments/{investmentId}/cancel
+Authorization: Bearer <accessToken>
+
+Request:
+{
+  "reason": "Created by mistake"
+}
+
+============================================================
+6. WALLET AND WITHDRAWALS - INVESTOR
+============================================================
+
+6.1 GET WALLET
+GET https://api.anusgatrade.com/api/wallet
+Authorization: Bearer <accessToken>
+
+------------------------------------------------------------
+
+6.2 GET WALLET TRANSACTIONS
+GET https://api.anusgatrade.com/api/wallet/transactions
+Authorization: Bearer <accessToken>
+
+------------------------------------------------------------
+
+6.3 REQUEST WITHDRAWAL
+POST https://api.anusgatrade.com/api/withdrawals/request
+Authorization: Bearer <accessToken>
+
+Request:
+{
+  "requestedAmount": 1000
+}
+
+------------------------------------------------------------
+
+6.4 GET OWN WITHDRAWALS
+GET https://api.anusgatrade.com/api/withdrawals
+Authorization: Bearer <accessToken>
+
+============================================================
+7. DASHBOARD, REFERRAL, NOTIFICATIONS - INVESTOR
+============================================================
+
+7.1 INVESTOR DASHBOARD
+GET https://api.anusgatrade.com/api/dashboard
+Authorization: Bearer <accessToken>
+
+------------------------------------------------------------
+
+7.2 REFERRAL TREE
+GET https://api.anusgatrade.com/api/referrals/tree
+Authorization: Bearer <accessToken>
+
+------------------------------------------------------------
+
+7.3 REFERRAL COMMISSIONS
+GET https://api.anusgatrade.com/api/referrals/commissions
+Authorization: Bearer <accessToken>
+
+------------------------------------------------------------
+
+7.4 NOTIFICATIONS
+GET https://api.anusgatrade.com/api/notifications
+Authorization: Bearer <accessToken>
+
+------------------------------------------------------------
+
+7.5 MARK NOTIFICATION READ
+POST https://api.anusgatrade.com/api/notifications/{notificationId}/read
+Authorization: Bearer <accessToken>
+
+============================================================
+8. ADMIN KYC APIS
+============================================================
+
+8.1 GET PENDING KYC
+GET https://api.anusgatrade.com/api/admin/kyc/pending
+Authorization: Bearer <adminAccessToken>
+
+------------------------------------------------------------
+
+8.2 GET KYC DOCUMENTS
+GET https://api.anusgatrade.com/api/admin/kyc/{kycId}/documents
+Authorization: Bearer <adminAccessToken>
+
+Response:
+{
+  "panCard": "s3://bucket/anushatrade/kyc/file.jpg",
+  "aadhaarFront": "s3://bucket/anushatrade/kyc/file.jpg",
+  "aadhaarBack": "s3://bucket/anushatrade/kyc/file.jpg",
+  "selfie": "s3://bucket/anushatrade/kyc/file.jpg",
+  "bankProof": "s3://bucket/anushatrade/kyc/file.jpg"
+}
+
+------------------------------------------------------------
+
+8.3 APPROVE KYC
+POST https://api.anusgatrade.com/api/admin/kyc/{kycId}/approve
+Authorization: Bearer <adminAccessToken>
+
+Request:
+{
+  "adminNotes": "Verified documents"
+}
+
+Response:
+{
+  "id": "kyc-id",
+  "status": "APPROVED"
+}
+
+------------------------------------------------------------
+
+8.4 REJECT FULL KYC
+POST https://api.anusgatrade.com/api/admin/kyc/{kycId}/reject
+Authorization: Bearer <adminAccessToken>
+
+Request:
+{
+  "reason": "Documents are unclear",
+  "adminNotes": "Ask user to reupload"
+}
+
+------------------------------------------------------------
+
+8.5 REJECT SPECIFIC DOCUMENTS / ASK REUPLOAD
+POST https://api.anusgatrade.com/api/admin/kyc/{kycId}/documents/reject
+Authorization: Bearer <adminAccessToken>
+
+Request:
+{
+  "reason": "PAN image is blurred",
+  "adminNotes": "Only PAN needs reupload",
+  "panCard": true,
+  "aadhaarFront": false,
+  "aadhaarBack": false,
+  "selfie": false,
+  "bankProof": false
+}
+
+Response:
+{
+  "id": "kyc-id",
+  "status": "REUPLOAD_REQUIRED",
+  "panCardStatus": "REUPLOAD_REQUIRED"
+}
+
+============================================================
+9. ADMIN PLAN APIS
+============================================================
+
+9.1 GET ALL PLANS
+GET https://api.anusgatrade.com/api/admin/plans
+Authorization: Bearer <adminAccessToken>
+
+------------------------------------------------------------
+
+9.2 CREATE PLAN
+POST https://api.anusgatrade.com/api/admin/plans
+Authorization: Bearer <adminAccessToken>
+
+Request:
+{
+  "planName": "Gold Plan",
+  "description": "Monthly interest plan",
+  "minimumAmount": 5000,
+  "maximumAmount": 500000,
+  "lockInMonths": 12,
+  "monthlyInterestRate": 1.5
+}
+
+------------------------------------------------------------
+
+9.3 UPDATE PLAN
+PUT https://api.anusgatrade.com/api/admin/plans/{planId}
+Authorization: Bearer <adminAccessToken>
+
+Request:
+{
+  "planName": "Gold Plan Updated",
+  "description": "Updated plan",
+  "minimumAmount": 5000,
+  "maximumAmount": 600000,
+  "lockInMonths": 12,
+  "monthlyInterestRate": 1.6,
+  "active": true
+}
+
+------------------------------------------------------------
+
+9.4 DEACTIVATE PLAN
+POST https://api.anusgatrade.com/api/admin/plans/{planId}/deactivate
+Authorization: Bearer <adminAccessToken>
+
+============================================================
+10. ADMIN INVESTMENT APIS
+============================================================
+
+10.1 GET PENDING INVESTMENTS
+GET https://api.anusgatrade.com/api/admin/investments/pending
+Authorization: Bearer <adminAccessToken>
+
+------------------------------------------------------------
+
+10.2 GET ALL INVESTMENTS
+GET https://api.anusgatrade.com/api/admin/investments
+Authorization: Bearer <adminAccessToken>
+
+------------------------------------------------------------
+
+10.3 VERIFY RECEIPT
+POST https://api.anusgatrade.com/api/admin/investments/{investmentId}/verify-receipt
+Authorization: Bearer <adminAccessToken>
+
+Approve:
+{
+  "approved": true
+}
+
+Reject:
+{
+  "approved": false,
+  "rejectionReason": "Amount mismatch"
+}
+
+------------------------------------------------------------
+
+10.4 ACTIVATE INVESTMENT
+POST https://api.anusgatrade.com/api/admin/investments/{investmentId}/activate
+Authorization: Bearer <adminAccessToken>
+
+Request:
+{
+  "notes": "Receipt verified and investment activated"
+}
+
+============================================================
+11. ADMIN WITHDRAWAL APIS
+============================================================
+
+11.1 GET PENDING WITHDRAWALS
+GET https://api.anusgatrade.com/api/admin/withdrawals/pending
+Authorization: Bearer <adminAccessToken>
+
+------------------------------------------------------------
+
+11.2 APPROVE WITHDRAWAL
+POST https://api.anusgatrade.com/api/admin/withdrawals/{withdrawalId}/approve
+Authorization: Bearer <adminAccessToken>
+
+Request:
+{
+  "adminNotes": "Approved"
+}
+
+------------------------------------------------------------
+
+11.3 PROCESS WITHDRAWAL
+POST https://api.anusgatrade.com/api/admin/withdrawals/{withdrawalId}/process
+Authorization: Bearer <adminAccessToken>
+
+Request:
+{
+  "bankTransferReference": "UTR123456789",
+  "adminNotes": "Transferred to bank"
+}
+
+------------------------------------------------------------
+
+11.4 REJECT WITHDRAWAL
+POST https://api.anusgatrade.com/api/admin/withdrawals/{withdrawalId}/reject
+Authorization: Bearer <adminAccessToken>
+
+Request:
+{
+  "reason": "Insufficient verification",
+  "adminNotes": "Rejected by admin"
+}
+
+============================================================
+12. ADMIN OPS APIS
+============================================================
+
+12.1 ADMIN DASHBOARD
+GET https://api.anusgatrade.com/api/admin/dashboard
+Authorization: Bearer <adminAccessToken>
+
+------------------------------------------------------------
+
+12.2 GET USERS
+GET https://api.anusgatrade.com/api/admin/users
+Authorization: Bearer <adminAccessToken>
+
+------------------------------------------------------------
+
+12.3 SUSPEND USER
+POST https://api.anusgatrade.com/api/admin/users/{userId}/suspend
+Authorization: Bearer <adminAccessToken>
+
+Request:
+{
+  "reason": "Suspicious activity"
+}
+
+------------------------------------------------------------
+
+12.4 GET FRAUD ALERTS
+GET https://api.anusgatrade.com/api/admin/fraud-alerts
+Authorization: Bearer <adminAccessToken>
+
+------------------------------------------------------------
+
+12.5 RESOLVE FRAUD ALERT
+POST https://api.anusgatrade.com/api/admin/fraud-alerts/{alertId}/resolve
+Authorization: Bearer <adminAccessToken>
+
+Request:
+{
+  "resolutionNotes": "Reviewed and resolved",
+  "status": "RESOLVED"
+}
+
+Allowed status:
+OPEN, UNDER_REVIEW, RESOLVED, FALSE_POSITIVE
+
+------------------------------------------------------------
+
+12.6 GET AUDIT LOGS
+GET https://api.anusgatrade.com/api/admin/audit-logs
+Authorization: Bearer <adminAccessToken>
+
+With search:
+GET https://api.anusgatrade.com/api/admin/audit-logs?query=KYC
+
+------------------------------------------------------------
+
+12.7 MONTHLY REPORT
+GET https://api.anusgatrade.com/api/admin/reports/monthly
+Authorization: Bearer <adminAccessToken>
+
+------------------------------------------------------------
+
+12.8 GET INTEREST RATES
+GET https://api.anusgatrade.com/api/admin/interest/rates
+Authorization: Bearer <adminAccessToken>
+
+------------------------------------------------------------
+
+12.9 UPDATE INTEREST RATE
+PUT https://api.anusgatrade.com/api/admin/interest/rates?planId=<planId>
+Authorization: Bearer <adminAccessToken>
+
+Request:
+{
+  "monthlyInterestRate": 1.6
+}
+
+------------------------------------------------------------
+
+12.10 TRIGGER MONTHLY INTEREST RUN
+POST https://api.anusgatrade.com/api/admin/interest/trigger
+Authorization: Bearer <adminAccessToken>
+
+Response:
+{
+  "message": "Interest run completed",
+  "month": "2026-05",
+  "processedInvestments": 10
+}
+
+============================================================
+13. SYSTEM / DOCS APIS
+============================================================
+
+13.1 HEALTH CHECK
+GET https://api.anusgatrade.com/actuator/health
+
+Response:
+{
+  "status": "UP"
+}
+
+------------------------------------------------------------
+
+13.2 SWAGGER UI
+GET https://api.anusgatrade.com/swagger-ui.html
+
+------------------------------------------------------------
+
+13.3 OPENAPI JSON
+GET https://api.anusgatrade.com/v3/api-docs
+
+============================================================
+14. FINAL SIGNUP JOURNEY
+============================================================
+
+Option A - Email OTP Signup:
+1. POST /api/auth/send-otp with email
+2. POST /api/auth/verify-otp with email and otp
+3. POST /api/auth/register with signupVerificationToken
+4. GET /api/auth/verify-email?token=...
+5. POST /api/auth/login
+6. Upload KYC documents
+7. Admin approves KYC
+8. POST /api/bank/link
+9. POST /api/auth/activate
+10. POST /api/auth/set-mpin
+11. GET /api/dashboard
+
+Option B - Mobile OTP Signup:
+1. POST /api/auth/send-otp with mobileNumber
+2. POST /api/auth/verify-otp with mobileNumber and otp
+3. POST /api/auth/register with signupVerificationToken
+4. Continue same flow
+
+============================================================
+15. IMPORTANT STATUS VALUES
+============================================================
+
+KYC STATUS:
+NOT_SUBMITTED
+PENDING
+APPROVED
+REJECTED
+REUPLOAD_REQUIRED
+
+DOCUMENT REVIEW STATUS:
+NOT_UPLOADED
+PENDING
+APPROVED
+REJECTED
+REUPLOAD_REQUIRED
+
+ACCOUNT STATUS:
+PENDING
+ACTIVE
+SUSPENDED
+DEACTIVATED
+
+ONBOARDING STATUS:
+MOBILE_VERIFIED
+PROFILE_COMPLETED
+PASSWORD_CREATED
+TERMS_ACCEPTED
+KYC_COMPLETED
+BANK_LINKED
+ACCOUNT_ACTIVATED
+MPIN_CREATED
+OTP_VERIFIED
+REGISTERED
+KYC_PENDING
+BANK_PENDING
+ACTIVE
+
+INVESTMENT STATUS:
+PENDING_RECEIPT
+RECEIPT_UPLOADED
+ACTIVE
+MATURED
+CANCELLED
+EARLY_WITHDRAWAL
+REJECTED
+
+WITHDRAWAL STATUS:
+PENDING
+APPROVED
+REJECTED
+PROCESSED
+
+============================================================
+16. PRODUCTION CONFIG NOTES
+============================================================
+
+GitHub Variables for email:
+APP_EMAIL_ENABLED=true
+APP_EMAIL_EXPOSE_GENERATED_VALUES=false
+APP_FRONTEND_BASE_URL=https://your-frontend-domain.com
+SPRING_MAIL_HOST=sg2plzcpnl508172.prod.sin2.secureserver.net
+SPRING_MAIL_PORT=465
+
+GitHub Secrets for email:
+SPRING_MAIL_USERNAME=support@anushatrade.com
+SPRING_MAIL_PASSWORD=<mailbox-password>
+APP_EMAIL_FROM=support@anushatrade.com
+
+GitHub Variables for S3:
+APP_FILE_STORAGE_PROVIDER=s3
+APP_FILE_STORAGE_S3_REGION=ap-south-2
+APP_FILE_STORAGE_S3_PREFIX=anushatrade
+APP_FILE_STORAGE_S3_PUBLIC_BASE_URL=
+
+GitHub Secrets for S3:
+APP_FILE_STORAGE_S3_BUCKET=<your-bucket-name>
+
+S3 bucket should remain private:
+Block all public access: ON
+Object ownership: Bucket owner enforced
+Encryption: SSE-S3
+
+============================================================
+END
+============================================================

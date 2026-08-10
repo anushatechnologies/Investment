@@ -1,0 +1,10 @@
+.git
+.github
+target/*
+!target/backend-0.0.1-SNAPSHOT.jar
+uploads/
+tmp-test/
+*.log
+*.iml
+.idea/
+.vscode/
