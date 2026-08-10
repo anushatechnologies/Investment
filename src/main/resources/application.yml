@@ -1,0 +1,66 @@
+spring:
+  application:
+    name: anushabazaar-backend
+  main:
+    banner-mode: off
+  datasource:
+    url: jdbc:mysql://localhost:3306/anushabazaar?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata
+    username: root
+    password: 2395   
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 25MB
+
+server:
+  port: 8080
+  error:
+    include-message: always
+    include-binding-errors: never
+    include-stacktrace: never
+    include-exception: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    root: INFO
+    org.springframework: INFO
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: WARN
+    com.anushabazaar.backend: INFO
+
+app:
+  jwt:
+    secret: 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
+    access-expiry-hours: 24
+    refresh-expiry-days: 7
+  file-storage:
+    root: uploads
+  whatsapp:
+    phone-number-id: ${META_PHONE_NUMBER_ID:mock_phone_number_id}
+    access-token: ${META_ACCESS_TOKEN:mock_access_token}
+    webhook-verify-token: ${META_WEBHOOK_VERIFY_TOKEN:anusha_whatsapp_verify_token}
+    template-name: ${META_TEMPLATE_NAME:investment_payment_receipt}
+    enabled: ${META_WHATSAPP_ENABLED:true}
+
