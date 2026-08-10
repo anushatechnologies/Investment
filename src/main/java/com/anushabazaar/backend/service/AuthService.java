@@ -277,6 +277,8 @@ public class AuthService {
                 referralRelationshipRepository.save(relationship);
             }
         });
+    }
+
     @Transactional
     public Map<String, Object> verifyBank(User user, ApiDtos.VerifyBankRequest request, HttpServletRequest servletRequest) {
         user.setBankAccountNumber(request.bankAccountNumber());
