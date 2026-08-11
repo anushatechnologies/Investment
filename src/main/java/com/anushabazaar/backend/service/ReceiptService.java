@@ -49,7 +49,7 @@ public class ReceiptService {
         Investment investment = investmentRepository.findById(investmentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Investment not found"));
 
-        if (!user.getRole().name().contains("ADMIN") && !investment.getInvestorId().equals(user.getId())) {
+        if (!user.getRole().name().contains("ADMIN") && !investment.getInvestorUserId().equals(user.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied to investment receipt");
         }
 

@@ -50,6 +50,7 @@ public class SecurityConfig {
                                 "/api/auth/refresh-token",
                                 "/api/auth/forgot-password",
                                 "/api/auth/reset-password",
+                                "/api/webhooks/whatsapp",
                                 "/api/webhooks/whatsapp/**",
                                 "/actuator/health",
                                 "/actuator/info",

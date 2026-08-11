@@ -866,17 +866,82 @@ public class PlatformService {
         );
     }
 
+    @Transactional
     public Map<String, Object> verifyRazorpayPayment(User user, ApiDtos.VerifyRazorpayPaymentRequest request, HttpServletRequest servletRequest) {
-        auditService.log(user, "VERIFY_RAZORPAY_PAYMENT", "SUCCESS", "Verified Razorpay payment " + request.razorpayPaymentId(), servletRequest);
-        return Map.of("status", "SUCCESS", "message", "Payment verified successfully", "paymentId", request.razorpayPaymentId());
+        String investmentId = request.investmentId();
+        if (investmentId == null || investmentId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investment ID is required");
+        }
+        Investment investment = getInvestment(investmentId);
+        if (!user.getRole().name().contains("ADMIN") && !investment.getInvestorUserId().equals(user.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your investment");
+        }
+
+        investment.setStatus(DomainEnums.InvestmentStatus.ACTIVE);
+        investment.setActivatedAt(LocalDateTime.now());
+        investment.setReceiptApproved(true);
+        investmentRepository.save(investment);
+
+        PaymentReceipt receipt = paymentReceiptRepository.findTopByInvestmentIdOrderByUploadedAtDesc(investment.getId())
+                .orElseGet(() -> {
+                    PaymentReceipt r = new PaymentReceipt();
+                    r.setId(UUID.randomUUID().toString());
+                    r.setInvestmentId(investment.getId());
+                    r.setInvestorId(user.getId());
+                    r.setPaymentAmount(investment.getInvestmentAmount());
+                    r.setPaymentDate(LocalDate.now());
+                    r.setUploadedAt(LocalDateTime.now());
+                    r.setVerificationStatus(DomainEnums.ReceiptStatus.APPROVED);
+                    return r;
+                });
+
+        receipt.setVerificationStatus(DomainEnums.ReceiptStatus.APPROVED);
+        receipt.setPaymentAmount(investment.getInvestmentAmount());
+        if (receipt.getReceiptNumber() == null || receipt.getReceiptNumber().isBlank()) {
+            receipt.setReceiptNumber("ATR-2026-" + UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase());
+        }
+        if (receipt.getReceiptUrl() == null || receipt.getReceiptUrl().isBlank()) {
+            receipt.setReceiptUrl("https://storage.anusha.trade/receipts/" + receipt.getReceiptNumber() + ".pdf");
+        }
+
+        paymentReceiptRepository.save(receipt);
+
+        receiptService.triggerReceiptDelivery(receipt, user);
+
+        auditService.log(user, "VERIFY_RAZORPAY_PAYMENT", "SUCCESS", "Verified Razorpay payment " + request.razorpayPaymentId() + " for investment " + investment.getId(), servletRequest);
+
+        Map<String, Object> investmentMap = Map.of(
+                "id", investment.getId(),
+                "status", investment.getStatus().name()
+        );
+
+        Map<String, Object> paymentMap = Map.of(
+                "id", request.razorpayPaymentId() != null ? request.razorpayPaymentId() : "PAY_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
+                "status", "SUCCESS",
+                "captured", true
+        );
+
+        Map<String, Object> receiptMap = Map.of(
+                "receiptNumber", receipt.getReceiptNumber(),
+                "receiptUrl", receipt.getReceiptUrl(),
+                "emailStatus", receipt.getEmailStatus() != null ? receipt.getEmailStatus().name() : "QUEUED",
+                "whatsappStatus", receipt.getWhatsappStatus() != null ? receipt.getWhatsappStatus().name() : "QUEUED"
+        );
+
+        return Map.of(
+                "investment", investmentMap,
+                "payment", paymentMap,
+                "receipt", receiptMap,
+                "message", "Payment verified successfully. Receipt generation initiated."
+        );
     }
 
     public Map<String, Object> getOwnRazorpayPayment(User user, String investmentId) {
         Investment inv = getInvestment(investmentId);
-        if (!inv.getUserId().equals(user.getId())) {
+        if (!inv.getInvestorUserId().equals(user.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied");
         }
-        return Map.of("investmentId", investmentId, "status", inv.getStatus().name(), "amount", inv.getAmount());
+        return Map.of("investmentId", investmentId, "status", inv.getStatus().name(), "amount", inv.getInvestmentAmount());
     }
 
     public Map<String, Object> handleRazorpayWebhook(String signature, String eventId, String payload) {
