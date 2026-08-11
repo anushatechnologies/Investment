@@ -2,7 +2,6 @@ package com.anushabazaar.backend.controller;
 
 import com.anushabazaar.backend.service.CurrentUserService;
 import com.anushabazaar.backend.service.PlatformService;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,16 +25,6 @@ public class InvestorOpsController {
     @GetMapping("/api/referrals/commissions")
     public Object commissions() {
         return platformService.getReferralCommissions(currentUserService.requireCurrentUser());
-    }
-
-    @GetMapping("/api/notifications")
-    public Object notifications() {
-        return platformService.getNotifications(currentUserService.requireCurrentUser());
-    }
-
-    @PostMapping("/api/notifications/{id}/read")
-    public Object markRead(@PathVariable("id") String id, HttpServletRequest request) {
-        return platformService.markNotificationRead(currentUserService.requireCurrentUser(), id, request);
     }
 
     @GetMapping("/api/dashboard")
