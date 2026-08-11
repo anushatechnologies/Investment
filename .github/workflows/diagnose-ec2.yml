@@ -1,0 +1,50 @@
+﻿name: Diagnose EC2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  diagnose:
+    name: EC2 Diagnostic
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION || 'ap-south-2' }}
+      EC2_HOST: ${{ vars.EC2_HOST || secrets.EC2_HOST }}
+      EC2_USER: ${{ vars.EC2_USER || secrets.EC2_USER || 'ec2-user' }}
+      APP_PORT: ${{ vars.APP_PORT || secrets.APP_PORT || '8080' }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/ec2_key
+          chmod 600 ~/.ssh/ec2_key
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+
+      - name: Full EC2 Diagnostic
+        run: |
+          ssh -i ~/.ssh/ec2_key "$EC2_USER@$EC2_HOST" bash << 'DIAG'
+          echo "=== 1. ALL DOCKER CONTAINERS ==="
+          docker ps -a
+          echo "=== 2. DOCKER LOGS (last 100) ==="
+          docker logs investment-backend --tail 100 2>&1 || echo "Container not found"
+          echo "=== 3. ENV FILE (secrets hidden) ==="
+          cat ~/investment-backend/.env | grep -v -i "secret\|password\|token\|key" || echo ".env file not found"
+          echo "=== 4. NGINX CONFIG ==="
+          sudo cat /etc/nginx/sites-enabled/* 2>/dev/null || sudo cat /etc/nginx/conf.d/*.conf 2>/dev/null || echo "nginx config not found"
+          echo "=== 5. PORT LISTENERS ==="
+          ss -tlnp | grep -E '8080|80|443' || true
+          echo "=== 6. LOCAL HEALTH CHECK ==="
+          curl -s http://localhost:8080/actuator/health 2>&1 || echo "Local health check failed"
+          DIAG
