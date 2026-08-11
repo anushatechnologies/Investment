@@ -108,19 +108,36 @@ jobs:
 
       - name: Create runtime env file
         env:
+          SPRING_DATASOURCE_URL: ${{ env.SPRING_DATASOURCE_URL }}
+          SPRING_DATASOURCE_USERNAME: ${{ env.SPRING_DATASOURCE_USERNAME }}
           SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD || 'Admin12345' }}
           APP_JWT_SECRET: ${{ secrets.APP_JWT_SECRET }}
           APP_FIREBASE_PROJECT_ID: ${{ secrets.APP_FIREBASE_PROJECT_ID || 'anushabazaar-2288e' }}
           RAW_FIREBASE_BASE64: ${{ secrets.APP_FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+          APP_FILE_STORAGE_PROVIDER: ${{ env.APP_FILE_STORAGE_PROVIDER }}
           APP_FILE_STORAGE_S3_BUCKET: ${{ secrets.APP_FILE_STORAGE_S3_BUCKET }}
+          APP_FILE_STORAGE_S3_REGION: ${{ env.APP_FILE_STORAGE_S3_REGION }}
+          APP_FILE_STORAGE_S3_PREFIX: ${{ env.APP_FILE_STORAGE_S3_PREFIX }}
+          APP_FILE_STORAGE_S3_PUBLIC_BASE_URL: ${{ env.APP_FILE_STORAGE_S3_PUBLIC_BASE_URL }}
+          APP_EMAIL_ENABLED: ${{ env.APP_EMAIL_ENABLED }}
+          APP_EMAIL_EXPOSE_GENERATED_VALUES: ${{ env.APP_EMAIL_EXPOSE_GENERATED_VALUES }}
+          APP_FRONTEND_BASE_URL: ${{ env.APP_FRONTEND_BASE_URL }}
+          SPRING_MAIL_HOST: ${{ env.SPRING_MAIL_HOST }}
+          SPRING_MAIL_PORT: ${{ env.SPRING_MAIL_PORT }}
           SPRING_MAIL_USERNAME: ${{ secrets.SPRING_MAIL_USERNAME }}
           SPRING_MAIL_PASSWORD: ${{ secrets.SPRING_MAIL_PASSWORD }}
           APP_EMAIL_FROM: ${{ secrets.APP_EMAIL_FROM }}
+          APP_SEED_DEFAULT_ADMINS: ${{ env.APP_SEED_DEFAULT_ADMINS }}
           APP_ADMIN_EMAIL: ${{ secrets.APP_ADMIN_EMAIL }}
           APP_ADMIN_PASSWORD: ${{ secrets.APP_ADMIN_PASSWORD }}
+          APP_ADMIN_FULL_NAME: ${{ env.APP_ADMIN_FULL_NAME }}
+          APP_RAZORPAY_ENABLED: ${{ env.APP_RAZORPAY_ENABLED }}
           APP_RAZORPAY_KEY_ID: ${{ secrets.APP_RAZORPAY_KEY_ID }}
           APP_RAZORPAY_KEY_SECRET: ${{ secrets.APP_RAZORPAY_KEY_SECRET }}
           APP_RAZORPAY_WEBHOOK_SECRET: ${{ secrets.APP_RAZORPAY_WEBHOOK_SECRET }}
+          APP_RAZORPAY_CURRENCY: ${{ env.APP_RAZORPAY_CURRENCY }}
+          APP_RAZORPAY_AUTO_CAPTURE: ${{ env.APP_RAZORPAY_AUTO_CAPTURE }}
+          APP_RAZORPAY_API_BASE_URL: ${{ env.APP_RAZORPAY_API_BASE_URL }}
           META_PHONE_NUMBER_ID: ${{ secrets.META_PHONE_NUMBER_ID }}
           META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
           META_WEBHOOK_VERIFY_TOKEN: ${{ secrets.META_WEBHOOK_VERIFY_TOKEN }}
@@ -167,8 +184,8 @@ jobs:
             "META_WEBHOOK_VERIFY_TOKEN=${META_WEBHOOK_VERIFY_TOKEN}" \
             "META_WHATSAPP_ENABLED=${META_WHATSAPP_ENABLED}" \
             > runtime.env
-          echo "=== runtime.env first 3 lines (DB URL masked) ==="
-          head -3 runtime.env | sed 's/=.*/=***/'
+          echo "=== runtime.env check ==="
+          grep "SPRING_DATASOURCE_URL" runtime.env | sed 's/=.*/=**HIDDEN**/'
 
 
       - name: Copy runtime env file to EC2
