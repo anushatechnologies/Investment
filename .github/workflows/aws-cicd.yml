@@ -48,7 +48,7 @@ jobs:
       EC2_HOST: ${{ vars.EC2_HOST || secrets.EC2_HOST }}
       EC2_USER: ${{ vars.EC2_USER || secrets.EC2_USER || 'ec2-user' }}
       APP_PORT: ${{ vars.APP_PORT || secrets.APP_PORT || vars.CONTAINER_PORT || secrets.CONTAINER_PORT || '8080' }}
-      SPRING_DATASOURCE_URL: ${{ secrets.SPRING_DATASOURCE_URL || 'jdbc:mysql://investment-db.cze8cqsmy2le.ap-south-2.rds.amazonaws.com:3306/anushabazaar?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' }}
+      SPRING_DATASOURCE_URL: ${{ secrets.SPRING_DATASOURCE_URL || 'jdbc:mysql://investment-db.cze8cqsmy2le.ap-south-2.rds.amazonaws.com:3306/investment_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' }}
       SPRING_DATASOURCE_USERNAME: ${{ secrets.SPRING_DATASOURCE_USERNAME || 'venkat' }}
       SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD || 'Admin12345' }}
       APP_FILE_STORAGE_PROVIDER: ${{ vars.APP_FILE_STORAGE_PROVIDER || secrets.APP_FILE_STORAGE_PROVIDER || 'local' }}
