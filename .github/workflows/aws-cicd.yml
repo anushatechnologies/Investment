@@ -229,18 +229,26 @@ jobs:
 
       - name: Verify deployment health
         run: |
-          echo "Waiting 30 seconds for app to start..."
-          sleep 30
+          echo "Waiting for app to complete startup..."
+          SUCCESS=0
+          for i in {1..15}; do
+            echo "Health check attempt $i of 15..."
+            HTTP_CODE=$(ssh -i ~/.ssh/ec2_key "$EC2_USER@$EC2_HOST" "curl -s -o /dev/null -w '%{http_code}' http://localhost:$APP_PORT/actuator/health --max-time 5 || echo 000")
+            echo "Attempt $i returned HTTP $HTTP_CODE"
+            if [ "$HTTP_CODE" = "200" ]; then
+              SUCCESS=1
+              break
+            fi
+            sleep 5
+          done
+
           echo "=== Docker container status ==="
           ssh -i ~/.ssh/ec2_key "$EC2_USER@$EC2_HOST" "docker ps -a --filter name=investment-backend"
-          echo "=== Last 80 lines of app logs ==="
-          ssh -i ~/.ssh/ec2_key "$EC2_USER@$EC2_HOST" "docker logs investment-backend --tail 80 2>&1 || echo 'Container not found or no logs'"
-          echo "=== Health check ==="
-          HTTP_CODE=$(ssh -i ~/.ssh/ec2_key "$EC2_USER@$EC2_HOST" "curl -s -o /dev/null -w '%{http_code}' http://localhost:$APP_PORT/actuator/health --max-time 10 || echo 000")
-          echo "Health endpoint returned: $HTTP_CODE"
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "WARNING: App health check failed with HTTP $HTTP_CODE"
-            echo "See docker logs above for the startup error."
+          echo "=== Last 50 lines of app logs ==="
+          ssh -i ~/.ssh/ec2_key "$EC2_USER@$EC2_HOST" "docker logs investment-backend --tail 50 2>&1 || echo 'No logs'"
+
+          if [ "$SUCCESS" -ne 1 ]; then
+            echo "ERROR: App health check failed."
             exit 1
           fi
-          echo "App is healthy!"
+          echo "App is healthy and running!"
