@@ -1,0 +1,94 @@
+================================================================================
+ANUSHA TRADE — FRONTEND API INTEGRATION SPECIFICATION: WHATSAPP RECEIPT FLOW
+================================================================================
+
+1. API 1: PAYMENT VERIFICATION & RECEIPT TRIGGER
+--------------------------------------------------------------------------------
+Endpoint: POST /api/payments/razorpay/verify
+Base URL: https://api.anushatrade.com
+Full URL: https://api.anushatrade.com/api/payments/razorpay/verify
+Authentication: Bearer <JWT_TOKEN>
+Header: Content-Type: application/json
+
+Request Body (JSON):
+{
+  "razorpayPaymentId": "pay_P123456789",
+  "razorpayOrderId": "order_O987654321",
+  "razorpaySignature": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "investmentId": "ATINV202608100001"
+}
+
+Response Body (200 OK):
+{
+  "investment": {
+    "id": "ATINV202608100001",
+    "status": "ACTIVE"
+  },
+  "payment": {
+    "id": "pay_P123456789",
+    "status": "SUCCESS",
+    "captured": true
+  },
+  "receipt": {
+    "receiptNumber": "ATR-2026-000001",
+    "receiptUrl": "https://storage.anusha.trade/receipts/ATR-2026-000001.pdf",
+    "emailStatus": "QUEUED",
+    "whatsappStatus": "QUEUED"
+  },
+  "message": "Payment verified successfully. Receipt generation initiated."
+}
+
+
+2. API 2: GET RECEIPT STATUS (POLLING ENDPOINT)
+--------------------------------------------------------------------------------
+Endpoint: GET /api/receipts/{investmentId}/status
+Base URL: https://api.anushatrade.com
+Full URL: https://api.anushatrade.com/api/receipts/ATINV202608100001/status
+Authentication: Bearer <JWT_TOKEN>
+
+Response Body (200 OK):
+{
+  "paymentStatus": "SUCCESS",
+  "investmentId": "ATINV202608100001",
+  "amount": 100000.00,
+  "receipt": {
+    "receiptNumber": "ATR-2026-000001",
+    "receiptUrl": "https://storage.anusha.trade/receipts/ATR-2026-000001.pdf",
+    "emailStatus": "SENT",
+    "whatsappStatus": "DELIVERED",
+    "available": true
+  }
+}
+
+
+3. WHATSAPP STATUS ENUM VALUES & RECOMMENDED FRONTEND UI LOGIC
+--------------------------------------------------------------------------------
+- NOT_SENT  : Dispatch not initiated. (Show default receipt UI)
+- QUEUED    : Queued in background worker. (Display: ⏳ Preparing receipt... | Keep polling every 2-4s)
+- SENDING   : Payload sent to Meta API. (Display: ⏳ Sending to WhatsApp... | Keep polling)
+- SENT      : Dispatched by Meta to user. (Display: ✓ Sent to WhatsApp)
+- DELIVERED : Received by user's WhatsApp. (Display: ✓✓ Delivered to WhatsApp)
+- READ      : Opened by user on WhatsApp. (Display: ✓✓ Read on WhatsApp)
+- FAILED    : Delivery failed (invalid number / blocked). (Display: ⚠ Delivery failed | Download PDF remains active)
+
+
+4. META WHATSAPP WEBHOOK ENDPOINTS (AUTOMATED SERVER-TO-SERVER)
+--------------------------------------------------------------------------------
+Verification Endpoint: GET https://api.anushatrade.com/api/webhooks/whatsapp
+Query Parameters:
+  - hub.mode = subscribe
+  - hub.verify_token = anusha_whatsapp_verify_token
+  - hub.challenge = <challenge_string>
+Response: 200 OK with challenge string
+
+Event Endpoint: POST https://api.anushatrade.com/api/webhooks/whatsapp
+Content-Type: application/json
+Payload: Meta WhatsApp Cloud API status notification payload (sent, delivered, read, failed).
+Response: 200 OK ("EVENT_RECEIVED")
+
+
+5. SECURITY & ACCESS CONTROL
+--------------------------------------------------------------------------------
+1. All client endpoints (/api/receipts/**, /api/payments/**) require Bearer JWT token in Authorization header.
+2. Authenticated user can only query receipts for investments owned by their account.
+3. Webhook endpoints (/api/webhooks/whatsapp) are publicly accessible for Meta Cloud API integration.
