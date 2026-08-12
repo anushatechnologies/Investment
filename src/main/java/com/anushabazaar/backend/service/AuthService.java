@@ -146,13 +146,68 @@ public class AuthService {
 
     @Transactional
     public Map<String, Object> login(ApiDtos.LoginRequest request, HttpServletRequest servletRequest) {
-        User user = userRepository.findByEmail(request.email().toLowerCase())
+        String identifier = extractIdentifier(request);
+        String secret = extractSecret(request);
+
+        if (identifier == null || identifier.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email or Mobile number is required");
+        }
+        if (secret == null || secret.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password or MPIN is required");
+        }
+
+        User user = findUserByIdentifier(identifier)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials"));
 
+        return processUserLogin(user, secret, servletRequest);
+    }
+
+    @Transactional
+    public Map<String, Object> mobileLogin(ApiDtos.MobileLoginRequest request, HttpServletRequest servletRequest) {
+        String mobile = request.mobileNumber() != null ? request.mobileNumber() : request.phone();
+        String secret = request.mpin() != null && !request.mpin().isBlank() ? request.mpin() : request.password();
+
+        if (mobile == null || mobile.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mobile number is required");
+        }
+        if (secret == null || secret.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN or Password is required");
+        }
+
+        User user = findUserByIdentifier(mobile)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid mobile number or MPIN"));
+
+        return processUserLogin(user, secret, servletRequest);
+    }
+
+    @Transactional
+    public Map<String, Object> setMpin(User user, ApiDtos.SetMpinRequest request, HttpServletRequest servletRequest) {
+        if (request.mpin() == null || request.mpin().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN is required");
+        }
+        user.setMpinHash(passwordEncoder.encode(request.mpin()));
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        auditService.log(user, "SET_MPIN", "User", user.getId(), null, "MPIN set successfully", servletRequest);
+        return Map.of("message", "MPIN updated successfully");
+    }
+
+    private Map<String, Object> processUserLogin(User user, String secret, HttpServletRequest servletRequest) {
         if (user.getAccountLockedUntil() != null && user.getAccountLockedUntil().isAfter(LocalDateTime.now())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account is temporarily locked");
         }
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+
+        boolean secretMatches = false;
+        if (user.getMpinHash() != null && passwordEncoder.matches(secret, user.getMpinHash())) {
+            secretMatches = true;
+        } else if (user.getPasswordHash() != null && passwordEncoder.matches(secret, user.getPasswordHash())) {
+            secretMatches = true;
+            if (user.getMpinHash() == null && secret.length() <= 6 && secret.matches("\\d+")) {
+                user.setMpinHash(passwordEncoder.encode(secret));
+            }
+        }
+
+        if (!secretMatches) {
             user.setFailedLoginAttempts(user.getFailedLoginAttempts() + 1);
             if (user.getFailedLoginAttempts() >= 5) {
                 user.setAccountLockedUntil(LocalDateTime.now().plusMinutes(30));
@@ -160,9 +215,7 @@ public class AuthService {
             userRepository.save(user);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid credentials");
         }
-        if (!user.isEmailVerified()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Verify email before login");
-        }
+
         if (user.getAccountStatus() == DomainEnums.AccountStatus.SUSPENDED || user.getAccountStatus() == DomainEnums.AccountStatus.DEACTIVATED) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account is not active");
         }
@@ -177,12 +230,46 @@ public class AuthService {
         TokenRecord refreshToken = issueToken(user.getId(), DomainEnums.TokenType.REFRESH, refreshExpiryDays * 24);
         auditService.log(user, "LOGIN", "User", user.getId(), null, user.getEmail(), servletRequest);
 
-        return Map.of(
-                "accessToken", accessToken,
-                "refreshToken", refreshToken.getTokenValue(),
-                "role", user.getRole(),
-                "userId", user.getId()
-        );
+        Map<String, Object> response = new HashMap<>();
+        response.put("accessToken", accessToken);
+        response.put("token", accessToken);
+        response.put("refreshToken", refreshToken.getTokenValue());
+        response.put("role", user.getRole());
+        response.put("userId", user.getId());
+        response.put("user", user);
+        response.put("message", "Login successful");
+        return response;
+    }
+
+    private String extractIdentifier(ApiDtos.LoginRequest request) {
+        if (request.mobileNumber() != null && !request.mobileNumber().isBlank()) return request.mobileNumber();
+        if (request.phone() != null && !request.phone().isBlank()) return request.phone();
+        if (request.username() != null && !request.username().isBlank()) return request.username();
+        if (request.email() != null && !request.email().isBlank()) return request.email();
+        return null;
+    }
+
+    private String extractSecret(ApiDtos.LoginRequest request) {
+        if (request.mpin() != null && !request.mpin().isBlank()) return request.mpin();
+        if (request.password() != null && !request.password().isBlank()) return request.password();
+        return null;
+    }
+
+    private java.util.Optional<User> findUserByIdentifier(String identifier) {
+        if (identifier == null) return java.util.Optional.empty();
+        String cleaned = identifier.trim();
+        String digitsOnly = cleaned.replaceAll("\\D", "");
+
+        if (digitsOnly.length() >= 10) {
+            String last10 = digitsOnly.substring(digitsOnly.length() - 10);
+            java.util.Optional<User> byMobile = userRepository.findByMobileNumberEndingWith(last10);
+            if (byMobile.isPresent()) return byMobile;
+        }
+
+        java.util.Optional<User> byMobileExact = userRepository.findByMobileNumber(cleaned);
+        if (byMobileExact.isPresent()) return byMobileExact;
+
+        return userRepository.findByEmail(cleaned.toLowerCase());
     }
 
     public Map<String, Object> refresh(ApiDtos.RefreshTokenRequest request) {

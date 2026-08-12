@@ -48,6 +48,7 @@ public class User {
     private String createdBy;
     private boolean bankVerified;
     private LocalDateTime bankVerifiedAt;
+    private String mpinHash;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -111,4 +112,6 @@ public class User {
     public void setBankVerified(boolean bankVerified) { this.bankVerified = bankVerified; }
     public LocalDateTime getBankVerifiedAt() { return bankVerifiedAt; }
     public void setBankVerifiedAt(LocalDateTime bankVerifiedAt) { this.bankVerifiedAt = bankVerifiedAt; }
+    public String getMpinHash() { return mpinHash; }
+    public void setMpinHash(String mpinHash) { this.mpinHash = mpinHash; }
 }

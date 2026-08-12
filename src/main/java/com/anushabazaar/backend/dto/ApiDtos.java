@@ -33,7 +33,28 @@ public final class ApiDtos {
     ) {
     }
 
-    public record LoginRequest(@Email String email, @NotBlank String password) {
+    public record LoginRequest(
+            String email,
+            String mobileNumber,
+            String username,
+            String phone,
+            String password,
+            String mpin
+    ) {
+    }
+
+    public record MobileLoginRequest(
+            String mobileNumber,
+            String phone,
+            String mpin,
+            String password
+    ) {
+    }
+
+    public record SetMpinRequest(
+            String mpin,
+            String password
+    ) {
     }
 
     public record RefreshTokenRequest(@NotBlank String refreshToken) {

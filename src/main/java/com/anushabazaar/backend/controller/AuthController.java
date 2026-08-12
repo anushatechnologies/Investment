@@ -32,8 +32,23 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public Map<String, Object> login(@Valid @RequestBody ApiDtos.LoginRequest request, HttpServletRequest servletRequest) {
+    public Map<String, Object> login(@RequestBody ApiDtos.LoginRequest request, HttpServletRequest servletRequest) {
         return authService.login(request, servletRequest);
+    }
+
+    @PostMapping("/mobile-login")
+    public Map<String, Object> mobileLogin(@RequestBody ApiDtos.MobileLoginRequest request, HttpServletRequest servletRequest) {
+        return authService.mobileLogin(request, servletRequest);
+    }
+
+    @PostMapping("/mpin-login")
+    public Map<String, Object> mpinLogin(@RequestBody ApiDtos.MobileLoginRequest request, HttpServletRequest servletRequest) {
+        return authService.mobileLogin(request, servletRequest);
+    }
+
+    @PostMapping("/set-mpin")
+    public Map<String, Object> setMpin(@RequestBody ApiDtos.SetMpinRequest request, HttpServletRequest servletRequest) {
+        return authService.setMpin(currentUserService.requireCurrentUser(), request, servletRequest);
     }
 
     @PostMapping("/refresh-token")

@@ -47,6 +47,8 @@ public class SecurityConfig {
                                 "/api/auth/register",
                                 "/api/auth/verify-email",
                                 "/api/auth/login",
+                                "/api/auth/mobile-login",
+                                "/api/auth/mpin-login",
                                 "/api/auth/refresh-token",
                                 "/api/auth/forgot-password",
                                 "/api/auth/reset-password",
