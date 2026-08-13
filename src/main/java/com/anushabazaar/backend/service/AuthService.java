@@ -226,11 +226,40 @@ public class AuthService {
         if (request.mpin() == null || request.mpin().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN is required");
         }
-        user.setMpinHash(passwordEncoder.encode(request.mpin()));
+        String mpin = request.mpin().trim();
+        if (!mpin.matches("\\d{4,6}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN must be 4 to 6 numeric digits");
+        }
+        List<String> weakPatterns = List.of(
+            "0000", "1111", "2222", "3333", "4444", "5555", "6666", "7777", "8888", "9999",
+            "1234", "2345", "3456", "4567", "5678", "6789", "7890",
+            "4321", "5432", "6543", "7654", "8765", "9876", "0987",
+            "123456", "654321", "000000", "111111"
+        );
+        if (weakPatterns.contains(mpin)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Please choose a stronger MPIN. Avoid simple patterns like 1234 or 1111.");
+        }
+        user.setMpinHash(passwordEncoder.encode(mpin));
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         auditService.log(user, "SET_MPIN", "User", user.getId(), null, "MPIN set successfully", servletRequest);
-        return Map.of("message", "MPIN updated successfully");
+        return Map.of(
+            "message", "MPIN updated successfully",
+            "mpinCreated", true
+        );
+    }
+
+    public Map<String, Object> verifyMpin(User user, ApiDtos.SetMpinRequest request) {
+        if (request.mpin() == null || request.mpin().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN is required");
+        }
+        if (user.getMpinHash() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN has not been set for this account");
+        }
+        if (!passwordEncoder.matches(request.mpin().trim(), user.getMpinHash())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid MPIN");
+        }
+        return Map.of("status", "SUCCESS", "verified", true, "message", "MPIN verified successfully");
     }
 
     public Map<String, Object> sendOtp(ApiDtos.SendOtpRequest request, HttpServletRequest servletRequest) {

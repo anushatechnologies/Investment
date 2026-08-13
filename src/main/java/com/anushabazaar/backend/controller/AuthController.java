@@ -86,6 +86,11 @@ public class AuthController {
         return authService.setMpin(currentUserService.requireCurrentUser(), request, servletRequest);
     }
 
+    @PostMapping("/verify-mpin")
+    public Map<String, Object> verifyMpin(@RequestBody ApiDtos.SetMpinRequest request) {
+        return authService.verifyMpin(currentUserService.requireCurrentUser(), request);
+    }
+
     @PostMapping("/refresh-token")
     public Map<String, Object> refresh(@Valid @RequestBody ApiDtos.RefreshTokenRequest request) {
         return authService.refresh(request);
