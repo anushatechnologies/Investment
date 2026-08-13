@@ -247,4 +247,12 @@ public final class ApiDtos {
             String reason
     ) {
     }
+
+    public record BroadcastNotificationRequest(
+            String title,
+            String message,
+            String targetAudience,
+            String channel
+    ) {
+    }
 }

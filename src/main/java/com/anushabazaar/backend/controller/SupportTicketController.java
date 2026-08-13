@@ -79,4 +79,58 @@ public class SupportTicketController {
 
         return supportTicketRepository.save(ticket);
     }
+
+    @GetMapping("/admin/tickets")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('SUPPORT')")
+    public List<SupportTicket> listAllAdminTickets() {
+        return supportTicketRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    @GetMapping("/admin/tickets/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('SUPPORT')")
+    public SupportTicket getAdminTicket(@PathVariable("id") String id) {
+        return supportTicketRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Support ticket not found"));
+    }
+
+    @PostMapping("/admin/tickets/{id}/assign")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('SUPPORT')")
+    public SupportTicket assignTicket(@PathVariable("id") String id, @RequestBody Map<String, String> body) {
+        SupportTicket ticket = supportTicketRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Support ticket not found"));
+        ticket.setAssignedAdminId(body.getOrDefault("assignedAdminId", currentUserService.requireCurrentUser().getId()));
+        ticket.setStatus(DomainEnums.SupportTicketStatus.IN_PROGRESS);
+        ticket.setUpdatedAt(LocalDateTime.now());
+        return supportTicketRepository.save(ticket);
+    }
+
+    @PostMapping("/admin/tickets/{id}/respond")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('SUPPORT')")
+    public SupportTicket respondTicket(@PathVariable("id") String id, @RequestBody Map<String, String> body) {
+        SupportTicket ticket = supportTicketRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Support ticket not found"));
+        String response = body.get("response");
+        if (response == null || response.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "response text is required");
+        }
+        ticket.setAdminResponse(response.trim());
+        ticket.setRespondedAt(LocalDateTime.now());
+        ticket.setRespondedByAdminId(currentUserService.requireCurrentUser().getId());
+        ticket.setStatus(DomainEnums.SupportTicketStatus.RESOLVED);
+        ticket.setUpdatedAt(LocalDateTime.now());
+        return supportTicketRepository.save(ticket);
+    }
+
+    @PostMapping("/admin/tickets/{id}/status")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN') or hasRole('SUPPORT')")
+    public SupportTicket updateTicketStatus(@PathVariable("id") String id, @RequestBody Map<String, String> body) {
+        SupportTicket ticket = supportTicketRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Support ticket not found"));
+        String status = body.get("status");
+        if (status != null) {
+            ticket.setStatus(DomainEnums.SupportTicketStatus.valueOf(status.toUpperCase()));
+            ticket.setUpdatedAt(LocalDateTime.now());
+        }
+        return supportTicketRepository.save(ticket);
+    }
 }

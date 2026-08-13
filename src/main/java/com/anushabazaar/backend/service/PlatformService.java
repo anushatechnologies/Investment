@@ -692,6 +692,24 @@ public class PlatformService {
         return txn;
     }
 
+    @Transactional
+    public Map<String, Object> broadcastNotification(User admin, ApiDtos.BroadcastNotificationRequest body, HttpServletRequest request) {
+        List<User> targetUsers = userRepository.findAll().stream()
+                .filter(u -> u.getRole() == DomainEnums.Role.INVESTOR)
+                .collect(Collectors.toList());
+
+        int sentCount = 0;
+        for (User target : targetUsers) {
+            notifyUser(target.getId(), body.title(), body.message(), DomainEnums.NotificationType.SYSTEM);
+            sentCount++;
+        }
+
+        auditService.log(admin, "NOTIFICATION_BROADCAST", "Notification", "BROADCAST", null,
+                "Title: " + body.title() + ", Target: " + (body.targetAudience() != null ? body.targetAudience() : "ALL_USERS") + ", Sent: " + sentCount, request);
+
+        return Map.of("status", "SUCCESS", "targetAudience", body.targetAudience() != null ? body.targetAudience() : "ALL_USERS", "recipientsCount", sentCount, "message", "Notification broadcast queued successfully.");
+    }
+
     public Map<String, Object> getReferralTree(User user) {
         List<ReferralRelationship> relationships = referralRelationshipRepository.findByReferrerUserIdOrderByReferralLevelAscLinkedAtDesc(user.getId());
         Map<Integer, List<Map<String, Object>>> tree = relationships.stream()

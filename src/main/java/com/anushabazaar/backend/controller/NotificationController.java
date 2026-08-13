@@ -54,4 +54,10 @@ public class NotificationController {
     public Object delete(@PathVariable("id") String id, HttpServletRequest request) {
         return platformService.deleteNotification(currentUserService.requireCurrentUser(), id, request);
     }
+
+    @PostMapping("/broadcast")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+    public Object broadcast(@RequestBody ApiDtos.BroadcastNotificationRequest request, HttpServletRequest servletRequest) {
+        return platformService.broadcastNotification(currentUserService.requireCurrentUser(), request, servletRequest);
+    }
 }
