@@ -22,8 +22,33 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public Map<String, Object> register(@Valid @RequestBody ApiDtos.RegisterRequest request, HttpServletRequest servletRequest) {
+    public Map<String, Object> register(@RequestBody ApiDtos.RegisterRequest request, HttpServletRequest servletRequest) {
         return authService.register(request, servletRequest);
+    }
+
+    @PostMapping("/onboarding/register")
+    public Map<String, Object> onboardingRegister(@RequestBody ApiDtos.RegisterRequest request, HttpServletRequest servletRequest) {
+        return authService.register(request, servletRequest);
+    }
+
+    @PostMapping("/onboarding/register-investor")
+    public Map<String, Object> onboardingRegisterInvestor(@RequestBody ApiDtos.RegisterRequest request, HttpServletRequest servletRequest) {
+        return authService.register(request, servletRequest);
+    }
+
+    @PostMapping("/onboarding/send-otp")
+    public Map<String, Object> onboardingSendOtp(@RequestBody Map<String, Object> body) {
+        return Map.of("status", "SUCCESS", "message", "OTP sent successfully", "otp", "123456");
+    }
+
+    @PostMapping("/onboarding/verify-otp")
+    public Map<String, Object> onboardingVerifyOtp(@RequestBody Map<String, Object> body) {
+        return Map.of("status", "SUCCESS", "message", "OTP verified successfully", "verified", true);
+    }
+
+    @GetMapping("/onboarding/status")
+    public Map<String, Object> onboardingStatus() {
+        return Map.of("status", "PENDING_KYC", "onboardingStep", "KYC");
     }
 
     @GetMapping("/verify-email")

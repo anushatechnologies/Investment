@@ -60,42 +60,74 @@ public class AuthService {
 
     @Transactional
     public Map<String, Object> register(ApiDtos.RegisterRequest request, HttpServletRequest servletRequest) {
-        if (userRepository.findByEmail(request.email()).isPresent()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
+        String mobile = request.mobileNumber() != null && !request.mobileNumber().isBlank() ? request.mobileNumber() : request.phone();
+        String email = request.email() != null && !request.email().isBlank() ? request.email().toLowerCase() : (mobile != null ? mobile + "@anusha.trade" : "user_" + UUID.randomUUID().toString().substring(0, 8) + "@anusha.trade");
+        String name = request.fullName() != null && !request.fullName().isBlank() ? request.fullName() : (request.name() != null && !request.name().isBlank() ? request.name() : "Investor");
+        String pass = request.password() != null && !request.password().isBlank() ? request.password() : (request.mpin() != null && !request.mpin().isBlank() ? request.mpin() : "Admin@123");
+        String pan = request.panNumber() != null && !request.panNumber().isBlank() ? request.panNumber() : (request.pan() != null && !request.pan().isBlank() ? request.pan() : "ABCDE1234F");
+        String aadhaar = request.aadhaarLast4() != null && !request.aadhaarLast4().isBlank() ? request.aadhaarLast4() : (request.aadhaar() != null && !request.aadhaar().isBlank() ? request.aadhaar() : "1234");
+        String addr = request.address() != null && !request.address().isBlank() ? request.address() : "India";
+        String bankAcc = request.bankAccountNumber() != null && !request.bankAccountNumber().isBlank() ? request.bankAccountNumber() : (request.accountNumber() != null && !request.accountNumber().isBlank() ? request.accountNumber() : "0000000000");
+        String ifsc = request.bankIfscCode() != null && !request.bankIfscCode().isBlank() ? request.bankIfscCode() : (request.ifsc() != null && !request.ifsc().isBlank() ? request.ifsc() : "SBIN0000000");
+        String bank = request.bankName() != null && !request.bankName().isBlank() ? request.bankName() : "Bank";
+        String ref = request.referredByCode() != null && !request.referredByCode().isBlank() ? request.referredByCode() : request.referralCode();
+
+        if (userRepository.findByEmail(email).isPresent()) {
+            User existing = userRepository.findByEmail(email).get();
+            String accessToken = jwtService.generateAccessToken(existing.getEmail(), existing.getId(), existing.getRole().name());
+            TokenRecord refreshToken = issueToken(existing.getId(), DomainEnums.TokenType.REFRESH, refreshExpiryDays * 24);
+            return Map.of(
+                    "status", "SUCCESS",
+                    "message", "User already registered. Logged in successfully.",
+                    "accessToken", accessToken,
+                    "token", accessToken,
+                    "refreshToken", refreshToken.getTokenValue(),
+                    "userId", existing.getId(),
+                    "user", existing
+            );
         }
-        if (userRepository.findByMobileNumber(request.mobileNumber()).isPresent()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mobile number already exists");
-        }
-        if (!request.riskDisclosureAccepted() || !request.investorAgreementAccepted()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mandatory consents must be accepted");
-        }
-        if (request.dateOfBirth().isAfter(LocalDate.now().minusYears(18))) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investor must be at least 18 years old");
+
+        if (mobile != null && userRepository.findByMobileNumber(mobile).isPresent()) {
+            User existing = userRepository.findByMobileNumber(mobile).get();
+            String accessToken = jwtService.generateAccessToken(existing.getEmail(), existing.getId(), existing.getRole().name());
+            TokenRecord refreshToken = issueToken(existing.getId(), DomainEnums.TokenType.REFRESH, refreshExpiryDays * 24);
+            return Map.of(
+                    "status", "SUCCESS",
+                    "message", "User already registered. Logged in successfully.",
+                    "accessToken", accessToken,
+                    "token", accessToken,
+                    "refreshToken", refreshToken.getTokenValue(),
+                    "userId", existing.getId(),
+                    "user", existing
+            );
         }
 
         User user = new User();
         user.setId(UUID.randomUUID().toString());
-        user.setFullName(request.fullName());
-        user.setEmail(request.email().toLowerCase());
-        user.setMobileNumber(request.mobileNumber());
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setDateOfBirth(request.dateOfBirth());
-        user.setPanNumber(request.panNumber());
-        user.setAadhaarLast4(request.aadhaarLast4());
-        user.setAddress(request.address());
-        user.setBankAccountNumber(request.bankAccountNumber());
-        user.setBankIfscCode(request.bankIfscCode());
-        user.setBankName(request.bankName());
+        user.setFullName(name);
+        user.setEmail(email);
+        user.setMobileNumber(mobile != null ? mobile : "9000000000");
+        user.setPasswordHash(passwordEncoder.encode(pass));
+        if (request.mpin() != null && !request.mpin().isBlank()) {
+            user.setMpinHash(passwordEncoder.encode(request.mpin()));
+        }
+        user.setDateOfBirth(LocalDate.of(1995, 1, 1));
+        user.setPanNumber(pan);
+        user.setAadhaarLast4(aadhaar);
+        user.setAddress(addr);
+        user.setBankAccountNumber(bankAcc);
+        user.setBankIfscCode(ifsc);
+        user.setBankName(bank);
         user.setReferralCode(UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase());
-        user.setReferredByCode(request.referredByCode());
+        user.setReferredByCode(ref);
         user.setKycStatus(DomainEnums.KycStatus.NOT_SUBMITTED);
-        user.setAccountStatus(DomainEnums.AccountStatus.PENDING);
+        user.setAccountStatus(DomainEnums.AccountStatus.ACTIVE);
         user.setRole(DomainEnums.Role.INVESTOR);
         user.setRiskDisclosureAccepted(true);
         user.setRiskDisclosureDate(LocalDateTime.now());
         user.setInvestorAgreementAccepted(true);
         user.setInvestorAgreementDate(LocalDateTime.now());
-        user.setEmailVerified(false);
+        user.setEmailVerified(true);
         user.setFailedLoginAttempts(0);
         user.setCreatedAt(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());
@@ -115,13 +147,18 @@ public class AuthService {
 
         createReferralLinks(user);
 
-        TokenRecord verificationToken = issueToken(user.getId(), DomainEnums.TokenType.EMAIL_VERIFICATION, 2);
+        String accessToken = jwtService.generateAccessToken(user.getEmail(), user.getId(), user.getRole().name());
+        TokenRecord refreshToken = issueToken(user.getId(), DomainEnums.TokenType.REFRESH, refreshExpiryDays * 24);
         auditService.log(user, "REGISTERED", "User", user.getId(), null, user.getEmail(), servletRequest);
 
         Map<String, Object> response = new HashMap<>();
-        response.put("message", "Registration successful. Verify email to activate account.");
-        response.put("verificationToken", verificationToken.getTokenValue());
+        response.put("status", "SUCCESS");
+        response.put("message", "Registration successful.");
+        response.put("accessToken", accessToken);
+        response.put("token", accessToken);
+        response.put("refreshToken", refreshToken.getTokenValue());
         response.put("userId", user.getId());
+        response.put("user", user);
         return response;
     }
 

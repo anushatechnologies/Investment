@@ -16,20 +16,31 @@ public final class ApiDtos {
     }
 
     public record RegisterRequest(
-            @NotBlank String fullName,
-            @Email String email,
-            @Pattern(regexp = "\\d{10}") String mobileNumber,
-            @Size(min = 8) String password,
-            @NotNull LocalDate dateOfBirth,
-            @NotBlank String panNumber,
-            @Pattern(regexp = "\\d{4}") String aadhaarLast4,
-            @NotBlank String address,
-            @NotBlank String bankAccountNumber,
-            @NotBlank String bankIfscCode,
-            @NotBlank String bankName,
+            String fullName,
+            String name,
+            String email,
+            String mobileNumber,
+            String phone,
+            String password,
+            String mpin,
+            Object dateOfBirth,
+            String dob,
+            String panNumber,
+            String pan,
+            String aadhaarLast4,
+            String aadhaar,
+            String address,
+            String bankAccountNumber,
+            String accountNumber,
+            String bankIfscCode,
+            String ifsc,
+            String bankName,
             String referredByCode,
-            boolean riskDisclosureAccepted,
-            boolean investorAgreementAccepted
+            String referralCode,
+            Boolean riskDisclosureAccepted,
+            Boolean investorAgreementAccepted,
+            Boolean termsAccepted,
+            Boolean promotionalConsent
     ) {
     }
 
