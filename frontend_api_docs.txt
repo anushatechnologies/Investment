@@ -1,14 +1,122 @@
 ================================================================================
-ANUSHA TRADE — FRONTEND API INTEGRATION SPECIFICATION: WHATSAPP RECEIPT FLOW
+ANUSHA TRADE — COMPLETE FRONTEND API INTEGRATION DOCUMENTATION
 ================================================================================
 
-1. API 1: PAYMENT VERIFICATION & RECEIPT TRIGGER
+SERVER BASE URL: https://api.anushatrade.com
+
+
 --------------------------------------------------------------------------------
+SECTION 1: AUTHENTICATION & ONBOARDING ENDPOINTS
+--------------------------------------------------------------------------------
+
+1.1 MOBILE ONBOARDING & REGISTRATION
+Endpoint: POST /api/auth/onboarding/register (or /api/auth/register)
+Headers: Content-Type: application/json
+
+Request Body (JSON):
+{
+  "fullName": "Aman Verma",          // Also accepts "name"
+  "mobileNumber": "+918019336733",   // Also accepts "phone" (formats like 8019336733, +918019336733)
+  "email": "aman@example.com",        // Optional (auto-generated if omitted)
+  "password": "Password123",         // Optional (auto-generated if omitted)
+  "mpin": "1234",                    // Optional 4 or 6 digit MPIN
+  "dateOfBirth": "1995-01-01",       // Optional
+  "panNumber": "ABCDE1234F",         // Optional
+  "aadhaarLast4": "1234",            // Optional
+  "address": "Hyderabad, India",     // Optional
+  "bankAccountNumber": "1234567890", // Optional
+  "bankIfscCode": "SBIN0001234",     // Optional
+  "bankName": "State Bank of India", // Optional
+  "referredByCode": "REF123"         // Optional
+}
+
+Response Body (200 OK):
+{
+  "status": "SUCCESS",
+  "message": "Registration successful.",
+  "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "refreshToken": "7a8b9c...",
+  "userId": "usr_12345678",
+  "user": {
+    "id": "usr_12345678",
+    "fullName": "Aman Verma",
+    "email": "aman@example.com",
+    "mobileNumber": "+918019336733",
+    "role": "INVESTOR",
+    "accountStatus": "ACTIVE"
+  }
+}
+
+
+1.2 MOBILE NUMBER & MPIN LOGIN
+Endpoint: POST /api/auth/mobile-login (or POST /api/auth/mpin-login)
+Headers: Content-Type: application/json
+
+Request Body (JSON):
+{
+  "mobileNumber": "8019336733", // Accepts 8019336733, +918019336733, 918019336733
+  "mpin": "1234"                // 4 or 6 digit MPIN (or user's password)
+}
+
+Response Body (200 OK):
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "refreshToken": "7a8b9c...",
+  "role": "INVESTOR",
+  "userId": "usr_12345678",
+  "user": { ... },
+  "message": "Login successful"
+}
+
+
+1.3 UNIVERSAL FLEXIBLE LOGIN (EMAIL OR MOBILE + PASSWORD OR MPIN)
+Endpoint: POST /api/auth/login
+Headers: Content-Type: application/json
+
+Request Body (JSON):
+{
+  "email": "aman@example.com", // OR "mobileNumber": "8019336733"
+  "password": "Password123"    // OR "mpin": "1234"
+}
+
+Response Body (200 OK): Same as 1.2
+
+
+1.4 SET / UPDATE MPIN
+Endpoint: POST /api/auth/set-mpin
+Headers:
+  Authorization: Bearer <JWT_TOKEN>
+  Content-Type: application/json
+
+Request Body (JSON):
+{
+  "mpin": "1234"
+}
+
+Response Body (200 OK):
+{
+  "message": "MPIN updated successfully"
+}
+
+
+1.5 ONBOARDING OTP HELPERS
+Endpoints:
+- POST /api/auth/onboarding/send-otp   -> Request: { "mobileNumber": "8019336733" } -> Response: { "status": "SUCCESS", "message": "OTP sent" }
+- POST /api/auth/onboarding/verify-otp -> Request: { "mobileNumber": "8019336733", "otp": "123456" } -> Response: { "status": "SUCCESS", "verified": true }
+- GET  /api/auth/onboarding/status     -> Response: { "status": "PENDING_KYC", "onboardingStep": "KYC" }
+
+
+--------------------------------------------------------------------------------
+SECTION 2: PAYMENT VERIFICATION & WHATSAPP RECEIPT FLOW
+--------------------------------------------------------------------------------
+
+2.1 PAYMENT VERIFICATION & RECEIPT DISPATCH
 Endpoint: POST /api/payments/razorpay/verify
-Base URL: https://api.anushatrade.com
-Full URL: https://api.anushatrade.com/api/payments/razorpay/verify
-Authentication: Bearer <JWT_TOKEN>
-Header: Content-Type: application/json
+Headers:
+  Authorization: Bearer <JWT_TOKEN>
+  Content-Type: application/json
 
 Request Body (JSON):
 {
@@ -39,12 +147,10 @@ Response Body (200 OK):
 }
 
 
-2. API 2: GET RECEIPT STATUS (POLLING ENDPOINT)
---------------------------------------------------------------------------------
+2.2 RECEIPT & WHATSAPP STATUS POLLING (MOBILE APP)
 Endpoint: GET /api/receipts/{investmentId}/status
-Base URL: https://api.anushatrade.com
-Full URL: https://api.anushatrade.com/api/receipts/ATINV202608100001/status
-Authentication: Bearer <JWT_TOKEN>
+Headers:
+  Authorization: Bearer <JWT_TOKEN>
 
 Response Body (200 OK):
 {
@@ -60,35 +166,18 @@ Response Body (200 OK):
   }
 }
 
-
-3. WHATSAPP STATUS ENUM VALUES & RECOMMENDED FRONTEND UI LOGIC
---------------------------------------------------------------------------------
-- NOT_SENT  : Dispatch not initiated. (Show default receipt UI)
-- QUEUED    : Queued in background worker. (Display: ⏳ Preparing receipt... | Keep polling every 2-4s)
+whatsappStatus Enum Values & UI Handling:
+- NOT_SENT  : Dispatch not initiated. (Show default UI)
+- QUEUED    : Queued in background worker. (Display: ⏳ Preparing receipt... | Poll every 2-4s)
 - SENDING   : Payload sent to Meta API. (Display: ⏳ Sending to WhatsApp... | Keep polling)
 - SENT      : Dispatched by Meta to user. (Display: ✓ Sent to WhatsApp)
-- DELIVERED : Received by user's WhatsApp. (Display: ✓✓ Delivered to WhatsApp)
-- READ      : Opened by user on WhatsApp. (Display: ✓✓ Read on WhatsApp)
+- DELIVERED : Received on recipient's phone. (Display: ✓✓ Delivered to WhatsApp)
+- READ      : Opened by recipient on WhatsApp. (Display: ✓✓ Read on WhatsApp)
 - FAILED    : Delivery failed (invalid number / blocked). (Display: ⚠ Delivery failed | Download PDF remains active)
 
 
-4. META WHATSAPP WEBHOOK ENDPOINTS (AUTOMATED SERVER-TO-SERVER)
 --------------------------------------------------------------------------------
-Verification Endpoint: GET https://api.anushatrade.com/api/webhooks/whatsapp
-Query Parameters:
-  - hub.mode = subscribe
-  - hub.verify_token = anusha_whatsapp_verify_token
-  - hub.challenge = <challenge_string>
-Response: 200 OK with challenge string
-
-Event Endpoint: POST https://api.anushatrade.com/api/webhooks/whatsapp
-Content-Type: application/json
-Payload: Meta WhatsApp Cloud API status notification payload (sent, delivered, read, failed).
-Response: 200 OK ("EVENT_RECEIVED")
-
-
-5. SECURITY & ACCESS CONTROL
+SECTION 3: META WHATSAPP WEBHOOKS (AUTOMATED SERVER-TO-SERVER)
 --------------------------------------------------------------------------------
-1. All client endpoints (/api/receipts/**, /api/payments/**) require Bearer JWT token in Authorization header.
-2. Authenticated user can only query receipts for investments owned by their account.
-3. Webhook endpoints (/api/webhooks/whatsapp) are publicly accessible for Meta Cloud API integration.
+- GET  /api/webhooks/whatsapp : Meta challenge verification handshake
+- POST /api/webhooks/whatsapp : Meta status delivery event notifications (SENT, DELIVERED, READ, FAILED)
