@@ -180,4 +180,13 @@ public final class DomainEnums {
         RESOLVED,
         CLOSED
     }
+
+    public enum PlanStatus {
+        DRAFT,
+        PENDING_APPROVAL,
+        APPROVED,
+        ACTIVE,
+        PAUSED,
+        CLOSED
+    }
 }

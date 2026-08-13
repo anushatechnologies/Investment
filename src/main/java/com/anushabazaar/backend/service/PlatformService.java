@@ -265,10 +265,83 @@ public class PlatformService {
     public InvestmentPlan deactivatePlan(User admin, String id, HttpServletRequest request) {
         InvestmentPlan plan = getPlan(id);
         plan.setActive(false);
+        plan.setPlanStatus(DomainEnums.PlanStatus.PAUSED);
         plan.setLastModifiedAt(LocalDateTime.now());
         plan.setLastModifiedBy(admin.getId());
         InvestmentPlan saved = planRepository.save(plan);
         auditService.log(admin, "PLAN_DEACTIVATED", "InvestmentPlan", id, null, saved.getPlanName(), request);
+        return saved;
+    }
+
+    @Transactional
+    public InvestmentPlan submitPlan(User admin, String id, HttpServletRequest request) {
+        InvestmentPlan plan = getPlan(id);
+        plan.setPlanStatus(DomainEnums.PlanStatus.PENDING_APPROVAL);
+        plan.setLastModifiedAt(LocalDateTime.now());
+        plan.setLastModifiedBy(admin.getId());
+        InvestmentPlan saved = planRepository.save(plan);
+        auditService.log(admin, "PLAN_SUBMITTED_FOR_APPROVAL", "InvestmentPlan", id, null, "Status: PENDING_APPROVAL", request);
+        return saved;
+    }
+
+    @Transactional
+    public InvestmentPlan approvePlan(User admin, String id, String notes, HttpServletRequest request) {
+        InvestmentPlan plan = getPlan(id);
+        plan.setPlanStatus(DomainEnums.PlanStatus.APPROVED);
+        plan.setApprovedByAdminId(admin.getId());
+        plan.setApprovalNotes(notes);
+        plan.setLastModifiedAt(LocalDateTime.now());
+        plan.setLastModifiedBy(admin.getId());
+        InvestmentPlan saved = planRepository.save(plan);
+        auditService.log(admin, "PLAN_APPROVED", "InvestmentPlan", id, null, "Approved by " + admin.getEmail(), request);
+        return saved;
+    }
+
+    @Transactional
+    public InvestmentPlan rejectPlan(User admin, String id, String notes, HttpServletRequest request) {
+        InvestmentPlan plan = getPlan(id);
+        plan.setPlanStatus(DomainEnums.PlanStatus.DRAFT);
+        plan.setApprovalNotes(notes);
+        plan.setLastModifiedAt(LocalDateTime.now());
+        plan.setLastModifiedBy(admin.getId());
+        InvestmentPlan saved = planRepository.save(plan);
+        auditService.log(admin, "PLAN_REJECTED", "InvestmentPlan", id, null, "Rejected: " + notes, request);
+        return saved;
+    }
+
+    @Transactional
+    public InvestmentPlan publishPlan(User admin, String id, HttpServletRequest request) {
+        InvestmentPlan plan = getPlan(id);
+        plan.setPlanStatus(DomainEnums.PlanStatus.ACTIVE);
+        plan.setActive(true);
+        plan.setLastModifiedAt(LocalDateTime.now());
+        plan.setLastModifiedBy(admin.getId());
+        InvestmentPlan saved = planRepository.save(plan);
+        auditService.log(admin, "PLAN_PUBLISHED", "InvestmentPlan", id, null, "Status: ACTIVE", request);
+        return saved;
+    }
+
+    @Transactional
+    public InvestmentPlan pausePlan(User admin, String id, HttpServletRequest request) {
+        InvestmentPlan plan = getPlan(id);
+        plan.setPlanStatus(DomainEnums.PlanStatus.PAUSED);
+        plan.setActive(false);
+        plan.setLastModifiedAt(LocalDateTime.now());
+        plan.setLastModifiedBy(admin.getId());
+        InvestmentPlan saved = planRepository.save(plan);
+        auditService.log(admin, "PLAN_PAUSED", "InvestmentPlan", id, null, "Status: PAUSED", request);
+        return saved;
+    }
+
+    @Transactional
+    public InvestmentPlan closePlan(User admin, String id, HttpServletRequest request) {
+        InvestmentPlan plan = getPlan(id);
+        plan.setPlanStatus(DomainEnums.PlanStatus.CLOSED);
+        plan.setActive(false);
+        plan.setLastModifiedAt(LocalDateTime.now());
+        plan.setLastModifiedBy(admin.getId());
+        InvestmentPlan saved = planRepository.save(plan);
+        auditService.log(admin, "PLAN_CLOSED", "InvestmentPlan", id, null, "Status: CLOSED", request);
         return saved;
     }
 

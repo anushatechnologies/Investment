@@ -48,4 +48,42 @@ public class PlanController {
     public Object deactivatePlan(@PathVariable("id") String id, HttpServletRequest request) {
         return platformService.deactivatePlan(currentUserService.requireCurrentUser(), id, request);
     }
+
+    @PostMapping("/api/admin/plans/{id}/submit")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+    public Object submitPlan(@PathVariable("id") String id, HttpServletRequest request) {
+        return platformService.submitPlan(currentUserService.requireCurrentUser(), id, request);
+    }
+
+    @PostMapping("/api/admin/plans/{id}/approve")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public Object approvePlan(@PathVariable("id") String id, @RequestBody(required = false) Map<String, String> body, HttpServletRequest request) {
+        String notes = body != null ? body.get("notes") : null;
+        return platformService.approvePlan(currentUserService.requireCurrentUser(), id, notes, request);
+    }
+
+    @PostMapping("/api/admin/plans/{id}/reject")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public Object rejectPlan(@PathVariable("id") String id, @RequestBody(required = false) Map<String, String> body, HttpServletRequest request) {
+        String notes = body != null ? body.get("notes") : "Revision required";
+        return platformService.rejectPlan(currentUserService.requireCurrentUser(), id, notes, request);
+    }
+
+    @PostMapping("/api/admin/plans/{id}/publish")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('ADMIN')")
+    public Object publishPlan(@PathVariable("id") String id, HttpServletRequest request) {
+        return platformService.publishPlan(currentUserService.requireCurrentUser(), id, request);
+    }
+
+    @PostMapping("/api/admin/plans/{id}/pause")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+    public Object pausePlan(@PathVariable("id") String id, HttpServletRequest request) {
+        return platformService.pausePlan(currentUserService.requireCurrentUser(), id, request);
+    }
+
+    @PostMapping("/api/admin/plans/{id}/close")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public Object closePlan(@PathVariable("id") String id, HttpServletRequest request) {
+        return platformService.closePlan(currentUserService.requireCurrentUser(), id, request);
+    }
 }
