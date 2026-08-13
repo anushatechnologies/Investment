@@ -85,4 +85,24 @@ public class AdminOpsController {
     public Object monthlyReport() {
         return platformService.getMonthlyReport();
     }
+
+    @GetMapping("/api/admin/payouts")
+    public Object payouts() {
+        return platformService.getPayouts();
+    }
+
+    @PostMapping("/api/admin/payouts/calculate")
+    public Object calculatePayouts(HttpServletRequest request) {
+        return platformService.triggerInterestRun(currentUserService.requireCurrentUser(), request);
+    }
+
+    @GetMapping("/api/admin/maturity/upcoming")
+    public Object upcomingMaturities() {
+        return platformService.getUpcomingMaturities();
+    }
+
+    @PostMapping("/api/admin/maturity/{id}/settle")
+    public Object settleMaturity(@PathVariable("id") String id, HttpServletRequest servletRequest) {
+        return platformService.settleMaturity(currentUserService.requireCurrentUser(), id, servletRequest);
+    }
 }

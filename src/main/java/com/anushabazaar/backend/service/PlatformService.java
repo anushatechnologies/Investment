@@ -718,6 +718,35 @@ public class PlatformService {
         return Map.of("message", "Interest run completed", "month", month, "processedInvestments", processed);
     }
 
+    public List<InterestRecord> getPayouts() {
+        return interestRecordRepository.findAll();
+    }
+
+    public List<Investment> getUpcomingMaturities() {
+        return investmentRepository.findByStatus(DomainEnums.InvestmentStatus.ACTIVE);
+    }
+
+    @Transactional
+    public Map<String, Object> settleMaturity(User admin, String investmentId, HttpServletRequest request) {
+        Investment investment = getInvestment(investmentId);
+        if (investment.getStatus() == DomainEnums.InvestmentStatus.MATURED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investment is already matured");
+        }
+
+        investment.setStatus(DomainEnums.InvestmentStatus.MATURED);
+        investmentRepository.save(investment);
+
+        BigDecimal settlementAmount = investment.getInvestmentAmount().add(investment.getTotalInterestEarned() != null ? investment.getTotalInterestEarned() : BigDecimal.ZERO);
+        Wallet investorWallet = getWalletByUserId(investment.getInvestorUserId());
+        creditWallet(investorWallet, investment.getInvestorUserId(), settlementAmount, DomainEnums.WalletTransactionType.INVESTMENT_CREDIT,
+                investment.getId(), "Maturity settlement credited", admin.getId());
+
+        notifyUser(investment.getInvestorUserId(), "Investment Matured", "Your investment " + investment.getId() + " has matured. Final settlement credited to wallet.", DomainEnums.NotificationType.INVESTMENT_UPDATE);
+        auditService.log(admin, "MATURITY_SETTLED", "Investment", investmentId, null, "Settlement amount: " + settlementAmount, request);
+
+        return Map.of("investmentId", investmentId, "status", "MATURED", "settlementAmount", settlementAmount, "message", "Maturity settlement processed successfully.");
+    }
+
     public Map<String, Object> getAdminDashboard() {
         List<User> allUsers = userRepository.findAll();
         List<User> investors = userRepository.findByRole(DomainEnums.Role.INVESTOR);
