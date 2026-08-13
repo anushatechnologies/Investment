@@ -62,6 +62,25 @@ public final class ApiDtos {
     ) {
     }
 
+    public record SendOtpRequest(
+            String email,
+            String mobileNumber,
+            String phone,
+            String type,
+            String channel
+    ) {
+    }
+
+    public record VerifyOtpRequest(
+            String email,
+            String mobileNumber,
+            String phone,
+            String otp,
+            String code,
+            String type
+    ) {
+    }
+
     public record SetMpinRequest(
             String mpin,
             String password

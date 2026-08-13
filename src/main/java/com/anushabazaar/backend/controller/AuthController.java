@@ -36,14 +36,24 @@ public class AuthController {
         return authService.register(request, servletRequest);
     }
 
+    @PostMapping("/send-otp")
+    public Map<String, Object> sendOtp(@RequestBody ApiDtos.SendOtpRequest request, HttpServletRequest servletRequest) {
+        return authService.sendOtp(request, servletRequest);
+    }
+
+    @PostMapping("/verify-otp")
+    public Map<String, Object> verifyOtp(@RequestBody ApiDtos.VerifyOtpRequest request) {
+        return authService.verifyOtp(request);
+    }
+
     @PostMapping("/onboarding/send-otp")
-    public Map<String, Object> onboardingSendOtp(@RequestBody Map<String, Object> body) {
-        return Map.of("status", "SUCCESS", "message", "OTP sent successfully", "otp", "123456");
+    public Map<String, Object> onboardingSendOtp(@RequestBody ApiDtos.SendOtpRequest request, HttpServletRequest servletRequest) {
+        return authService.sendOtp(request, servletRequest);
     }
 
     @PostMapping("/onboarding/verify-otp")
-    public Map<String, Object> onboardingVerifyOtp(@RequestBody Map<String, Object> body) {
-        return Map.of("status", "SUCCESS", "message", "OTP verified successfully", "verified", true);
+    public Map<String, Object> onboardingVerifyOtp(@RequestBody ApiDtos.VerifyOtpRequest request) {
+        return authService.verifyOtp(request);
     }
 
     @GetMapping("/onboarding/status")

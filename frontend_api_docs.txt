@@ -9,14 +9,52 @@ SERVER BASE URL: https://api.anushatrade.com
 SECTION 1: AUTHENTICATION & ONBOARDING ENDPOINTS
 --------------------------------------------------------------------------------
 
-1.1 MOBILE ONBOARDING & REGISTRATION
-Endpoint: POST /api/auth/onboarding/register (or /api/auth/register)
+1.1 SEND OTP (EMAIL / SMS)
+Endpoint: POST /api/auth/send-otp (or POST /api/auth/onboarding/send-otp)
+Headers: Content-Type: application/json
+
+Request Body (JSON):
+{
+  "email": "aman@example.com", // OR "mobileNumber": "8019336733"
+  "type": "signup"             // Optional ("signup", "login", "reset")
+}
+
+Response Body (200 OK):
+{
+  "status": "SUCCESS",
+  "message": "OTP sent successfully to your email.",
+  "otp": "123456",
+  "recipient": "aman@example.com",
+  "emailSent": true
+}
+
+
+1.2 VERIFY OTP
+Endpoint: POST /api/auth/verify-otp (or POST /api/auth/onboarding/verify-otp)
+Headers: Content-Type: application/json
+
+Request Body (JSON):
+{
+  "email": "aman@example.com", // OR "mobileNumber": "8019336733"
+  "otp": "123456"              // OR "code": "123456"
+}
+
+Response Body (200 OK):
+{
+  "status": "SUCCESS",
+  "message": "OTP verified successfully",
+  "verified": true
+}
+
+
+1.3 MOBILE ONBOARDING & REGISTRATION
+Endpoint: POST /api/auth/onboarding/register (or POST /api/auth/register)
 Headers: Content-Type: application/json
 
 Request Body (JSON):
 {
   "fullName": "Aman Verma",          // Also accepts "name"
-  "mobileNumber": "+918019336733",   // Also accepts "phone" (formats like 8019336733, +918019336733)
+  "mobileNumber": "+918019336733",   // Also accepts "phone" (formats: 8019336733, +918019336733)
   "email": "aman@example.com",        // Optional (auto-generated if omitted)
   "password": "Password123",         // Optional (auto-generated if omitted)
   "mpin": "1234",                    // Optional 4 or 6 digit MPIN
@@ -49,7 +87,7 @@ Response Body (200 OK):
 }
 
 
-1.2 MOBILE NUMBER & MPIN LOGIN
+1.4 MOBILE NUMBER & MPIN LOGIN
 Endpoint: POST /api/auth/mobile-login (or POST /api/auth/mpin-login)
 Headers: Content-Type: application/json
 
@@ -71,7 +109,7 @@ Response Body (200 OK):
 }
 
 
-1.3 UNIVERSAL FLEXIBLE LOGIN (EMAIL OR MOBILE + PASSWORD OR MPIN)
+1.5 UNIVERSAL FLEXIBLE LOGIN (EMAIL OR MOBILE + PASSWORD OR MPIN)
 Endpoint: POST /api/auth/login
 Headers: Content-Type: application/json
 
@@ -81,10 +119,10 @@ Request Body (JSON):
   "password": "Password123"    // OR "mpin": "1234"
 }
 
-Response Body (200 OK): Same as 1.2
+Response Body (200 OK): Same as 1.4
 
 
-1.4 SET / UPDATE MPIN
+1.6 SET / UPDATE MPIN
 Endpoint: POST /api/auth/set-mpin
 Headers:
   Authorization: Bearer <JWT_TOKEN>
@@ -99,13 +137,6 @@ Response Body (200 OK):
 {
   "message": "MPIN updated successfully"
 }
-
-
-1.5 ONBOARDING OTP HELPERS
-Endpoints:
-- POST /api/auth/onboarding/send-otp   -> Request: { "mobileNumber": "8019336733" } -> Response: { "status": "SUCCESS", "message": "OTP sent" }
-- POST /api/auth/onboarding/verify-otp -> Request: { "mobileNumber": "8019336733", "otp": "123456" } -> Response: { "status": "SUCCESS", "verified": true }
-- GET  /api/auth/onboarding/status     -> Response: { "status": "PENDING_KYC", "onboardingStep": "KYC" }
 
 
 --------------------------------------------------------------------------------
