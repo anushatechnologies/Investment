@@ -30,6 +30,17 @@ public final class DomainEnums {
         DEACTIVATED
     }
 
+    public enum RegistrationStepStatus {
+        MOBILE_VERIFIED,
+        MPIN_CREATED,
+        PROFILE_COMPLETED,
+        PAN_VERIFIED,
+        KYC_VERIFIED,
+        BANK_VERIFIED,
+        CONSENT_COMPLETED,
+        ACTIVE
+    }
+
     public enum InvestmentStatus {
         PENDING_RECEIPT,
         RECEIPT_UPLOADED,

@@ -262,4 +262,32 @@ public final class ApiDtos {
             String channel
     ) {
     }
+
+    public record MpinLoginRequest(
+            String mobileNumber,
+            String mobile,
+            String mpin
+    ) {
+    }
+
+    public record ForgotMpinRequest(
+            String mobileNumber,
+            String mobile
+    ) {
+    }
+
+    public record ResetMpinRequest(
+            String mobileNumber,
+            String mobile,
+            String otp,
+            String code,
+            String newMpin
+    ) {
+    }
+
+    public record ChangeMpinRequest(
+            String currentMpin,
+            String newMpin
+    ) {
+    }
 }
