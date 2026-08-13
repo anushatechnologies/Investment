@@ -240,4 +240,11 @@ public final class ApiDtos {
             ReceiptStatusDetails receipt
     ) {
     }
+
+    public record AdminWalletAdjustRequest(
+            String userId,
+            BigDecimal amount,
+            String reason
+    ) {
+    }
 }

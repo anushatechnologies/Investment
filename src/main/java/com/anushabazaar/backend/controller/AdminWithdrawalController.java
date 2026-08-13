@@ -25,6 +25,16 @@ public class AdminWithdrawalController {
         return platformService.getPendingWithdrawals();
     }
 
+    @GetMapping("/all")
+    public Object all() {
+        return platformService.getAllWithdrawals();
+    }
+
+    @PostMapping("/{id}/review")
+    public Object review(@PathVariable("id") String id, HttpServletRequest servletRequest) {
+        return platformService.reviewWithdrawal(currentUserService.requireCurrentUser(), id, servletRequest);
+    }
+
     @PostMapping("/{id}/approve")
     public Object approve(@PathVariable("id") String id, @RequestBody(required = false) ApiDtos.WithdrawalDecisionRequest request, HttpServletRequest servletRequest) {
         return platformService.approveWithdrawal(currentUserService.requireCurrentUser(), id,

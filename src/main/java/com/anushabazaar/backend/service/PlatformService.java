@@ -641,6 +641,57 @@ public class PlatformService {
         return saved;
     }
 
+    public List<WithdrawalRequest> getAllWithdrawals() {
+        return withdrawalRepository.findAll();
+    }
+
+    @Transactional
+    public WithdrawalRequest reviewWithdrawal(User admin, String id, HttpServletRequest request) {
+        WithdrawalRequest withdrawal = getWithdrawal(id);
+        withdrawal.setReviewedByAdminId(admin.getId());
+        withdrawal.setReviewedAt(LocalDateTime.now());
+        WithdrawalRequest saved = withdrawalRepository.save(withdrawal);
+        auditService.log(admin, "WITHDRAWAL_UNDER_REVIEW", "WithdrawalRequest", id, null, "UNDER_REVIEW", request);
+        return saved;
+    }
+
+    public List<WalletTransaction> getAllLedgerTransactions() {
+        return walletTransactionRepository.findAll();
+    }
+
+    public WalletTransaction getLedgerTransaction(String id) {
+        return walletTransactionRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ledger transaction not found"));
+    }
+
+    @Transactional
+    public WalletTransaction adjustLedgerBalance(User admin, ApiDtos.AdminWalletAdjustRequest body, HttpServletRequest request) {
+        Wallet wallet = getWalletByUserId(body.userId());
+        BigDecimal amount = body.amount();
+        DomainEnums.Direction direction = amount.compareTo(BigDecimal.ZERO) >= 0 ? DomainEnums.Direction.CREDIT : DomainEnums.Direction.DEBIT;
+        BigDecimal absAmount = amount.abs();
+
+        if (direction == DomainEnums.Direction.CREDIT) {
+            wallet.setAvailableBalance(wallet.getAvailableBalance().add(absAmount));
+            wallet.setTotalCredited(wallet.getTotalCredited().add(absAmount));
+        } else {
+            if (wallet.getAvailableBalance().compareTo(absAmount) < 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Insufficient wallet balance for debit adjustment");
+            }
+            wallet.setAvailableBalance(wallet.getAvailableBalance().subtract(absAmount));
+            wallet.setTotalDebited(wallet.getTotalDebited().add(absAmount));
+        }
+        wallet.setLastUpdatedAt(LocalDateTime.now());
+        walletRepository.save(wallet);
+
+        WalletTransaction txn = createWalletTransaction(wallet, body.userId(), DomainEnums.WalletTransactionType.ADMIN_ADJUSTMENT,
+                direction, absAmount, UUID.randomUUID().toString(), body.reason(), admin.getId());
+
+        auditService.log(admin, "LEDGER_ADJUSTED", "WalletTransaction", txn.getId(), null, "Amount: " + amount + ", Reason: " + body.reason(), request);
+        notifyUser(body.userId(), "Wallet Adjusted", "Wallet adjusted by admin. Amount: " + amount, DomainEnums.NotificationType.SYSTEM);
+        return txn;
+    }
+
     public Map<String, Object> getReferralTree(User user) {
         List<ReferralRelationship> relationships = referralRelationshipRepository.findByReferrerUserIdOrderByReferralLevelAscLinkedAtDesc(user.getId());
         Map<Integer, List<Map<String, Object>>> tree = relationships.stream()
