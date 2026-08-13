@@ -34,4 +34,21 @@ public class AdminRazorpayController {
     public Object syncInvestmentPayment(@PathVariable String investmentId, HttpServletRequest request) {
         return platformService.syncRazorpayPayment(currentUserService.requireCurrentUser(), investmentId, request);
     }
+
+    @GetMapping("/reconciliation")
+    public Object reconciliation() {
+        return platformService.getRazorpayReconciliation();
+    }
+
+    @GetMapping("/webhooks")
+    public Object webhooks() {
+        return platformService.getRazorpayWebhookLogs();
+    }
+
+    @PostMapping("/{paymentId}/refund")
+    public Object refund(@PathVariable String paymentId,
+                         @RequestBody com.anushabazaar.backend.dto.ApiDtos.RefundRazorpayPaymentRequest request,
+                         HttpServletRequest httpRequest) {
+        return platformService.refundRazorpayPayment(currentUserService.requireCurrentUser(), paymentId, request, httpRequest);
+    }
 }

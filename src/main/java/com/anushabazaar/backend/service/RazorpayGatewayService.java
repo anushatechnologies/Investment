@@ -67,6 +67,20 @@ public class RazorpayGatewayService {
         return send("POST", "/payments/" + urlEncode(paymentId) + "/capture", payload);
     }
 
+    public Map<String, Object> createRefund(String paymentId, BigDecimal amount, String notes) {
+        ensureConfigured();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        if (amount != null && amount.compareTo(BigDecimal.ZERO) > 0) {
+            payload.put("amount", toSubunits(amount));
+        }
+        if (notes != null && !notes.isBlank()) {
+            Map<String, Object> notesMap = new LinkedHashMap<>();
+            notesMap.put("reason", notes);
+            payload.put("notes", notesMap);
+        }
+        return send("POST", "/payments/" + urlEncode(paymentId) + "/refund", payload);
+    }
+
     public Map<String, Object> fetchSettlements(Integer count, Integer skip) {
         ensureConfigured();
         StringBuilder path = new StringBuilder("/settlements");

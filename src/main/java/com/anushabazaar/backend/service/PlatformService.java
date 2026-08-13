@@ -1386,8 +1386,8 @@ public class PlatformService {
         return Map.of("status", "SUCCESS", "eventHandled", true);
     }
 
-    public List<Map<String, Object>> getAllRazorpayPayments() {
-        return List.of();
+    public List<RazorpayPayment> getAllRazorpayPayments() {
+        return razorpayPaymentRepository.findAllByOrderByCheckoutOrderCreatedAtDesc();
     }
 
     public Map<String, Object> getRazorpaySettlements(Integer count, Integer skip) {
@@ -1397,6 +1397,70 @@ public class PlatformService {
     public Map<String, Object> syncRazorpayPayment(User admin, String investmentId, HttpServletRequest request) {
         auditService.log(admin, "SYNC_RAZORPAY_PAYMENT", "SUCCESS", "Synced payment for investment " + investmentId, request);
         return Map.of("investmentId", investmentId, "synced", true);
+    }
+
+    public List<Map<String, Object>> getRazorpayReconciliation() {
+        List<RazorpayPayment> list = razorpayPaymentRepository.findAllByOrderByCheckoutOrderCreatedAtDesc();
+        return list.stream().map(p -> {
+            boolean matched = "CAPTURED".equalsIgnoreCase(p.getStatus()) || "PAID".equalsIgnoreCase(p.getStatus());
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("paymentId", p.getId());
+            map.put("razorpayPaymentId", p.getRazorpayPaymentId());
+            map.put("razorpayOrderId", p.getRazorpayOrderId());
+            map.put("investmentId", p.getInvestmentId());
+            map.put("amount", p.getAmount());
+            map.put("status", p.getStatus());
+            map.put("matched", matched);
+            map.put("matchStatus", matched ? "MATCHED" : "MISMATCH");
+            return map;
+        }).collect(Collectors.toList());
+    }
+
+    public List<Map<String, Object>> getRazorpayWebhookLogs() {
+        List<RazorpayPayment> list = razorpayPaymentRepository.findAllByOrderByCheckoutOrderCreatedAtDesc();
+        return list.stream()
+                .filter(p -> p.getWebhookEventId() != null)
+                .map(p -> {
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("eventId", p.getWebhookEventId());
+                    map.put("eventType", p.getWebhookEventType());
+                    map.put("paymentId", p.getRazorpayPaymentId());
+                    map.put("orderId", p.getRazorpayOrderId());
+                    map.put("receivedAt", p.getPaymentCapturedAt());
+                    map.put("status", "PROCESSED");
+                    return map;
+                }).collect(Collectors.toList());
+    }
+
+    public Map<String, Object> refundRazorpayPayment(User admin, String paymentId, ApiDtos.RefundRazorpayPaymentRequest request, HttpServletRequest httpRequest) {
+        RazorpayPayment payment = razorpayPaymentRepository.findById(paymentId)
+                .or(() -> razorpayPaymentRepository.findByRazorpayPaymentId(paymentId))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Razorpay payment not found"));
+
+        Map<String, Object> refundResult = razorpayGatewayService.createRefund(payment.getRazorpayPaymentId() != null ? payment.getRazorpayPaymentId() : payment.getId(), request.amount(), request.reason());
+        payment.setStatus("REFUNDED");
+        razorpayPaymentRepository.save(payment);
+
+        if (payment.getInvestmentId() != null) {
+            Investment inv = getInvestment(payment.getInvestmentId());
+            if (inv != null) {
+                inv.setStatus(DomainEnums.InvestmentStatus.CANCELLED);
+                investmentRepository.save(inv);
+
+                WalletTransaction txn = new WalletTransaction();
+                txn.setId("TXN-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
+                txn.setUserId(inv.getInvestorUserId());
+                txn.setTransactionType(DomainEnums.TransactionType.REFUND_CREDIT);
+                txn.setAmount(request.amount() != null ? request.amount() : payment.getAmount());
+                txn.setDirection("CREDIT");
+                txn.setReferenceId(payment.getId());
+                txn.setDescription("Razorpay Refund: " + request.reason());
+                walletTransactionRepository.save(txn);
+            }
+        }
+
+        auditService.log(admin, "REFUND_RAZORPAY_PAYMENT", "SUCCESS", "Refunded payment " + paymentId + " with amount " + request.amount(), httpRequest);
+        return Map.of("paymentId", paymentId, "status", "REFUNDED", "refundResult", refundResult);
     }
 
     // ── Coupons ────────────────────────────────────────────────────────────────

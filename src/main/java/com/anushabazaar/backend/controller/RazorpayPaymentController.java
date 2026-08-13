@@ -10,7 +10,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/payments/razorpay")
 public class RazorpayPaymentController {
 
     private final PlatformService platformService;
@@ -21,25 +20,25 @@ public class RazorpayPaymentController {
         this.currentUserService = currentUserService;
     }
 
-    @PostMapping("/checkout-order")
+    @PostMapping({"/api/payments/razorpay/checkout-order", "/api/app/investments/orders"})
     @PreAuthorize("hasRole('INVESTOR')")
     public Object createCheckoutOrder(@Valid @RequestBody ApiDtos.ApplyInvestmentRequest request, HttpServletRequest servletRequest) {
         return platformService.createRazorpayCheckoutOrder(currentUserService.requireCurrentUser(), request, servletRequest);
     }
 
-    @PostMapping("/verify")
+    @PostMapping({"/api/payments/razorpay/verify", "/api/app/payments/verify"})
     @PreAuthorize("hasRole('INVESTOR')")
     public Object verifyPayment(@Valid @RequestBody ApiDtos.VerifyRazorpayPaymentRequest request, HttpServletRequest servletRequest) {
         return platformService.verifyRazorpayPayment(currentUserService.requireCurrentUser(), request, servletRequest);
     }
 
-    @GetMapping("/investments/{investmentId}")
+    @GetMapping({"/api/payments/razorpay/investments/{investmentId}", "/api/app/payments/{investmentId}/status"})
     @PreAuthorize("hasRole('INVESTOR')")
     public Object ownPayment(@PathVariable String investmentId) {
         return platformService.getOwnRazorpayPayment(currentUserService.requireCurrentUser(), investmentId);
     }
 
-    @PostMapping("/webhook")
+    @PostMapping({"/api/payments/razorpay/webhook", "/api/webhooks/razorpay"})
     public ResponseEntity<Object> webhook(@RequestHeader(value = "X-Razorpay-Signature", required = false) String signature,
                                           @RequestHeader(value = "x-razorpay-event-id", required = false) String eventId,
                                           @RequestBody String payload) {

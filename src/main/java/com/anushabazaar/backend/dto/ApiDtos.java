@@ -203,6 +203,12 @@ public final class ApiDtos {
     ) {
     }
 
+    public record RefundRazorpayPaymentRequest(
+            BigDecimal amount,
+            String reason
+    ) {
+    }
+
     public record ValidateCouponRequest(String code, BigDecimal amount) {
     }
 
