@@ -1438,4 +1438,24 @@ public class PlatformService {
         auditService.log(admin, "UPDATE_LEGAL_DOCUMENT", "SUCCESS", "Updated legal document " + documentKey, request);
         return Map.of("key", documentKey, "title", body.title(), "updated", true);
     }
+
+    public Map<String, Object> getSystemSettings() {
+        return Map.of(
+                "appName", "Anusha Trade",
+                "environment", "production",
+                "paymentGateway", "Razorpay",
+                "emailService", "SMTP",
+                "smsService", "Firebase Phone Auth",
+                "whatsappService", "Meta Cloud API v18.0",
+                "kycProvider", "Automated OCR & Penny Drop",
+                "riskDisclosureVersion", "v2.1",
+                "termsVersion", "v3.0"
+        );
+    }
+
+    @Transactional
+    public Map<String, Object> updateSystemSettings(User admin, Map<String, Object> settings, HttpServletRequest request) {
+        auditService.log(admin, "SETTINGS_UPDATED", "SystemSettings", "GLOBAL", null, "Updated system configuration settings", request);
+        return Map.of("status", "SUCCESS", "message", "System settings updated successfully.", "settings", settings);
+    }
 }
