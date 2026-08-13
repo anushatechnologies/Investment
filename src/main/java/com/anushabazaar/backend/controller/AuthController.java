@@ -115,4 +115,33 @@ public class AuthController {
     public Map<String, Object> changePassword(@Valid @RequestBody ApiDtos.ChangePasswordRequest request) {
         return authService.changePassword(currentUserService.requireCurrentUser(), request);
     }
+
+    /**
+     * POST /api/auth/activate
+     * Activates a newly registered account after KYC and bank verification.
+     * Called by Android app after onboarding completion.
+     */
+    @PostMapping("/activate")
+    public Map<String, Object> activateAccount() {
+        return authService.activateAccount(currentUserService.requireCurrentUser());
+    }
+
+    /**
+     * POST /api/auth/enable-biometric
+     * Enables or disables biometric authentication for the user's device.
+     * Called by Android app from biometric settings screen.
+     */
+    @PostMapping("/enable-biometric")
+    public Map<String, Object> enableBiometric(@RequestBody Map<String, Object> body) {
+        return authService.setBiometricPreference(currentUserService.requireCurrentUser(), body);
+    }
+
+    /**
+     * GET /api/auth/referrals/validate?code=XXX
+     * Validates a referral code entered during signup.
+     */
+    @GetMapping("/referrals/validate")
+    public Map<String, Object> validateReferralCode(@RequestParam("code") String code) {
+        return authService.validateReferralCode(code);
+    }
 }

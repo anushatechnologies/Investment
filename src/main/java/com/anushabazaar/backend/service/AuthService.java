@@ -527,4 +527,82 @@ public class AuthService {
                 "bankName", request.bankName()
         );
     }
+
+    /**
+     * POST /api/auth/activate
+     * Marks an investor's account as ACTIVE if KYC and bank are verified.
+     */
+    @Transactional
+    public Map<String, Object> activateAccount(User user) {
+        boolean kycApproved = DomainEnums.KycStatus.APPROVED.equals(user.getKycStatus());
+        boolean bankVerified = Boolean.TRUE.equals(user.isBankVerified());
+
+        if (!kycApproved || !bankVerified) {
+            Map<String, Object> result = new HashMap<>();
+            result.put("message", "Account cannot be activated yet. Complete KYC and bank verification first.");
+            result.put("onboardingStatus", user.getAccountStatus() != null ? user.getAccountStatus().name() : "PENDING");
+
+            result.put("kycStatus", user.getKycStatus() != null ? user.getKycStatus().name() : "NOT_SUBMITTED");
+            result.put("bankVerified", bankVerified);
+            result.put("mpinCreated", user.getMpinHash() != null);
+            result.put("nextStep", !kycApproved ? "KYC" : "BANK");
+            return result;
+        }
+
+        user.setAccountStatus(DomainEnums.AccountStatus.ACTIVE);
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "Account activated successfully.");
+        result.put("accountStatus", "ACTIVE");
+        result.put("onboardingStatus", "ACTIVE");
+        result.put("kycStatus", user.getKycStatus().name());
+        result.put("bankVerified", true);
+        result.put("mpinCreated", user.getMpinHash() != null);
+        result.put("nextStep", user.getMpinHash() == null ? "MPIN" : "DASHBOARD");
+        return result;
+    }
+
+    /**
+     * POST /api/auth/enable-biometric
+     * Saves device biometric preference for user. Stored as a user flag.
+     */
+    @Transactional
+    public Map<String, Object> setBiometricPreference(User user, Map<String, Object> body) {
+        boolean enabled = Boolean.TRUE.equals(body.get("enabled"));
+        user.setBiometricEnabled(enabled);
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        Map<String, Object> result = new HashMap<>();
+        result.put("biometricEnabled", enabled);
+        result.put("message", enabled ? "Biometric authentication enabled." : "Biometric authentication disabled.");
+        return result;
+    }
+
+    /**
+     * GET /api/auth/referrals/validate?code=XXX
+     * Validates a referral code and returns the referrer's name if found.
+     */
+    public Map<String, Object> validateReferralCode(String code) {
+        if (code == null || code.isBlank()) {
+            throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Referral code is required");
+        }
+        return userRepository.findByReferralCode(code.trim().toUpperCase())
+                .map(referrer -> {
+                    Map<String, Object> result = new HashMap<>();
+                    result.put("valid", true);
+                    result.put("referrerName", referrer.getFullName());
+                    result.put("code", referrer.getReferralCode());
+                    result.put("message", "Valid referral code.");
+                    return result;
+                })
+                .orElseGet(() -> {
+                    Map<String, Object> result = new HashMap<>();
+                    result.put("valid", false);
+                    result.put("message", "Invalid referral code.");
+                    return result;
+                });
+    }
 }
+

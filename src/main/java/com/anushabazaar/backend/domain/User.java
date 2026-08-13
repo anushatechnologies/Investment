@@ -49,6 +49,7 @@ public class User {
     private boolean bankVerified;
     private LocalDateTime bankVerifiedAt;
     private String mpinHash;
+    private boolean biometricEnabled;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -114,4 +115,6 @@ public class User {
     public void setBankVerifiedAt(LocalDateTime bankVerifiedAt) { this.bankVerifiedAt = bankVerifiedAt; }
     public String getMpinHash() { return mpinHash; }
     public void setMpinHash(String mpinHash) { this.mpinHash = mpinHash; }
+    public boolean isBiometricEnabled() { return biometricEnabled; }
+    public void setBiometricEnabled(boolean biometricEnabled) { this.biometricEnabled = biometricEnabled; }
 }
