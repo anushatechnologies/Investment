@@ -945,7 +945,7 @@ public class PlatformService {
         BankAccount bank = bankAccountRepository.findTopByUserIdOrderByCreatedAtDesc(userId).orElse(null);
         List<Investment> userInvestments = investmentRepository.findByInvestorUserId(userId);
         List<WalletTransaction> userTransactions = walletTransactionRepository.findByUserIdOrderByCreatedAtDesc(userId);
-        List<WithdrawalRequest> userWithdrawals = withdrawalRepository.findByUserIdOrderByRequestedAtDesc(userId);
+        List<WithdrawalRequest> userWithdrawals = withdrawalRepository.findByInvestorIdOrderByRequestedAtDesc(userId);
         Wallet wallet = walletRepository.findByUserId(userId).orElse(null);
 
         BigDecimal totalInvested = userInvestments.stream()

@@ -8,7 +8,6 @@ import java.util.List;
 
 public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalRequest, String> {
     List<WithdrawalRequest> findByInvestorIdOrderByRequestedAtDesc(String investorId);
-    List<WithdrawalRequest> findByUserIdOrderByRequestedAtDesc(String userId);
-    List<WithdrawalRequest> findByUserId(String userId);
+    List<WithdrawalRequest> findByInvestorId(String investorId);
     List<WithdrawalRequest> findByStatus(DomainEnums.WithdrawalStatus status);
 }
