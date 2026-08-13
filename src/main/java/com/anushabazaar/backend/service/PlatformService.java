@@ -673,24 +673,6 @@ public class PlatformService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ledger transaction not found"));
     }
 
-    private WalletTransaction createWalletTransaction(Wallet wallet, String userId, DomainEnums.WalletTransactionType type,
-                                                       DomainEnums.Direction direction, BigDecimal amount, String refId, String desc, String createdBy) {
-        WalletTransaction txn = new WalletTransaction();
-        txn.setId("TXN-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
-        txn.setWalletId(wallet != null ? wallet.getId() : null);
-        txn.setUserId(userId);
-        txn.setTransactionType(type);
-        txn.setDirection(direction);
-        txn.setAmount(amount);
-        txn.setBalanceBefore(wallet != null ? wallet.getAvailableBalance() : BigDecimal.ZERO);
-        txn.setBalanceAfter(wallet != null ? wallet.getAvailableBalance() : BigDecimal.ZERO);
-        txn.setReferenceId(refId);
-        txn.setDescription(desc);
-        txn.setCreatedAt(LocalDateTime.now());
-        txn.setCreatedBy(createdBy);
-        return walletTransactionRepository.save(txn);
-    }
-
     @Transactional
     public WalletTransaction adjustLedgerBalance(User admin, ApiDtos.AdminWalletAdjustRequest body, HttpServletRequest request) {
         Wallet wallet = getWalletByUserId(body.userId());
@@ -1263,22 +1245,22 @@ public class PlatformService {
         createWalletTransaction(wallet, userId, type, DomainEnums.Direction.CREDIT, amount, referenceId, description, createdBy);
     }
 
-    private void createWalletTransaction(Wallet wallet, String userId, DomainEnums.WalletTransactionType type, DomainEnums.Direction direction,
+    private WalletTransaction createWalletTransaction(Wallet wallet, String userId, DomainEnums.WalletTransactionType type, DomainEnums.Direction direction,
                                          BigDecimal amount, String referenceId, String description, String createdBy) {
         WalletTransaction transaction = new WalletTransaction();
         transaction.setId(UUID.randomUUID().toString());
-        transaction.setWalletId(wallet.getId());
+        transaction.setWalletId(wallet != null ? wallet.getId() : null);
         transaction.setUserId(userId);
         transaction.setTransactionType(type);
         transaction.setAmount(amount);
         transaction.setDirection(direction);
-        transaction.setBalanceBefore(direction == DomainEnums.Direction.CREDIT ? wallet.getAvailableBalance().subtract(amount) : wallet.getAvailableBalance().add(amount));
-        transaction.setBalanceAfter(wallet.getAvailableBalance());
+        transaction.setBalanceBefore(wallet != null ? (direction == DomainEnums.Direction.CREDIT ? wallet.getAvailableBalance().subtract(amount) : wallet.getAvailableBalance().add(amount)) : BigDecimal.ZERO);
+        transaction.setBalanceAfter(wallet != null ? wallet.getAvailableBalance() : BigDecimal.ZERO);
         transaction.setReferenceId(referenceId);
         transaction.setDescription(description);
         transaction.setCreatedAt(LocalDateTime.now());
         transaction.setCreatedBy(createdBy);
-        walletTransactionRepository.save(transaction);
+        return walletTransactionRepository.save(transaction);
     }
 
     // ── Notifications ──────────────────────────────────────────────────────────

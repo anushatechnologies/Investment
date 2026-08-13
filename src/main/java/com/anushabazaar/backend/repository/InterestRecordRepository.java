@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface InterestRecordRepository extends JpaRepository<InterestRecord, String> {
+    List<InterestRecord> findByInvestmentId(String investmentId);
     List<InterestRecord> findByInvestorIdOrderByCalculatedAtDesc(String investorId);
     boolean existsByInvestmentIdAndCalculationMonth(String investmentId, String calculationMonth);
 }
