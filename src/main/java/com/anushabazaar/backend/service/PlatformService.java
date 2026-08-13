@@ -492,6 +492,41 @@ public class PlatformService {
         return investmentRepository.findAll();
     }
 
+    public Map<String, Object> getAdminInvestmentDetails(String id) {
+        Investment investment = getInvestment(id);
+        User investor = userRepository.findById(investment.getInvestorUserId()).orElse(null);
+        InvestmentPlan plan = planRepository.findById(investment.getInvestmentPlanId()).orElse(null);
+        PaymentReceipt receipt = paymentReceiptRepository.findTopByInvestmentIdOrderByUploadedAtDesc(id).orElse(null);
+        List<InterestRecord> interestRecords = interestRecordRepository.findByInvestmentId(id);
+
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("investment", investment);
+        details.put("investor", investor != null ? Map.of("id", investor.getId(), "fullName", investor.getFullName(), "email", investor.getEmail(), "mobileNumber", investor.getMobileNumber()) : Map.of());
+        details.put("plan", plan);
+        details.put("receipt", receipt);
+        details.put("interestRecords", interestRecords);
+        return details;
+    }
+
+    @Transactional
+    public Investment pauseInvestmentByAdmin(User admin, String id, HttpServletRequest request) {
+        Investment investment = getInvestment(id);
+        investment.setStatus(DomainEnums.InvestmentStatus.PAUSED);
+        Investment saved = investmentRepository.save(investment);
+        auditService.log(admin, "INVESTMENT_PAUSED", "Investment", id, null, "Paused by admin", request);
+        return saved;
+    }
+
+    @Transactional
+    public Investment cancelInvestmentByAdmin(User admin, String id, String reason, HttpServletRequest request) {
+        Investment investment = getInvestment(id);
+        investment.setStatus(DomainEnums.InvestmentStatus.CANCELLED);
+        investment.setCancellationReason(reason != null ? reason : "Cancelled by admin");
+        Investment saved = investmentRepository.save(investment);
+        auditService.log(admin, "INVESTMENT_CANCELLED_ADMIN", "Investment", id, null, reason, request);
+        return saved;
+    }
+
     public Map<String, Object> getWallet(User user) {
         Wallet wallet = getWalletByUserId(user.getId());
         return Map.of(

@@ -40,4 +40,20 @@ public class AdminInvestmentController {
     public Object allInvestments() {
         return platformService.getAllInvestments();
     }
+
+    @GetMapping("/{id}")
+    public Object details(@PathVariable("id") String id) {
+        return platformService.getAdminInvestmentDetails(id);
+    }
+
+    @PostMapping("/{id}/pause")
+    public Object pause(@PathVariable("id") String id, HttpServletRequest servletRequest) {
+        return platformService.pauseInvestmentByAdmin(currentUserService.requireCurrentUser(), id, servletRequest);
+    }
+
+    @PostMapping("/{id}/cancel")
+    public Object cancel(@PathVariable("id") String id, @RequestBody(required = false) ApiDtos.CancelInvestmentRequest request, HttpServletRequest servletRequest) {
+        String reason = request == null ? "Cancelled by admin" : request.reason();
+        return platformService.cancelInvestmentByAdmin(currentUserService.requireCurrentUser(), id, reason, servletRequest);
+    }
 }
