@@ -167,6 +167,55 @@ public class PlatformService {
         );
     }
 
+    public List<KycSubmission> getAllKyc(String status) {
+        if (status != null && !status.isBlank() && !"ALL".equalsIgnoreCase(status)) {
+            try {
+                DomainEnums.KycStatus kycStatus = DomainEnums.KycStatus.valueOf(status.toUpperCase());
+                return kycSubmissionRepository.findByStatus(kycStatus);
+            } catch (Exception ignored) {
+            }
+        }
+        return kycSubmissionRepository.findAll();
+    }
+
+    @Transactional
+    public KycSubmission rejectKycDocuments(User admin, String id, ApiDtos.KycDecisionRequest body, HttpServletRequest request) {
+        return rejectKyc(admin, id, body, request);
+    }
+
+    public List<Map<String, Object>> getAllBankAccounts() {
+        return bankAccountRepository.findAll().stream()
+                .map(bank -> {
+                    User user = userRepository.findById(bank.getUserId()).orElse(null);
+                    String acc = bank.getBankAccountNumber();
+                    String masked = acc != null && acc.length() > 4 ? "XXXX XXXX " + acc.substring(acc.length() - 4) : acc;
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("id", bank.getId());
+                    map.put("userId", bank.getUserId());
+                    map.put("userName", user != null ? user.getFullName() : "N/A");
+                    map.put("userMobile", user != null ? user.getMobileNumber() : "N/A");
+                    map.put("bankName", bank.getBankName());
+                    map.put("bankAccountNumberMasked", masked);
+                    map.put("bankIfscCode", bank.getBankIfscCode());
+                    map.put("accountHolderName", bank.getAccountHolderName());
+                    map.put("verified", bank.isVerified());
+                    map.put("createdAt", bank.getCreatedAt());
+                    return map;
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public BankAccount verifyBankAccount(User admin, String bankId, HttpServletRequest request) {
+        BankAccount bank = bankAccountRepository.findById(bankId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bank account not found"));
+        bank.setVerified(true);
+        bank.setUpdatedAt(LocalDateTime.now());
+        BankAccount saved = bankAccountRepository.save(bank);
+        auditService.log(admin, "BANK_VERIFIED", "BankAccount", bankId, null, "Verified by admin", request);
+        return saved;
+    }
+
     public List<InvestmentPlan> getActivePlans() {
         return planRepository.findByActiveTrue();
     }

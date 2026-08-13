@@ -25,6 +25,11 @@ public class AdminKycController {
         return platformService.getPendingKyc();
     }
 
+    @GetMapping("/all")
+    public Object all(@RequestParam(value = "status", required = false) String status) {
+        return platformService.getAllKyc(status);
+    }
+
     @PostMapping("/{id}/approve")
     public Object approve(@PathVariable("id") String id, @RequestBody(required = false) ApiDtos.KycDecisionRequest request, HttpServletRequest servletRequest) {
         String notes = request == null ? null : request.adminNotes();
@@ -36,8 +41,23 @@ public class AdminKycController {
         return platformService.rejectKyc(currentUserService.requireCurrentUser(), id, request, servletRequest);
     }
 
+    @PostMapping("/{id}/documents/reject")
+    public Object rejectDocuments(@PathVariable("id") String id, @RequestBody ApiDtos.KycDecisionRequest request, HttpServletRequest servletRequest) {
+        return platformService.rejectKycDocuments(currentUserService.requireCurrentUser(), id, request, servletRequest);
+    }
+
     @GetMapping("/{id}/documents")
     public Object documents(@PathVariable("id") String id) {
         return platformService.getKycDocuments(id);
+    }
+
+    @GetMapping("/bank-accounts")
+    public Object bankAccounts() {
+        return platformService.getAllBankAccounts();
+    }
+
+    @PostMapping("/bank-accounts/{id}/verify")
+    public Object verifyBank(@PathVariable("id") String id, HttpServletRequest servletRequest) {
+        return platformService.verifyBankAccount(currentUserService.requireCurrentUser(), id, servletRequest);
     }
 }
