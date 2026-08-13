@@ -1,4 +1,4 @@
-package com.anushabazaar\backend\controller;
+package com.anushabazaar.backend.controller;
 
 import com.anushabazaar.backend.dto.ApiDtos;
 import com.anushabazaar.backend.service.CurrentUserService;
