@@ -117,6 +117,42 @@ public class AuthController {
     }
 
     /**
+     * POST /api/auth/forgot-mpin
+     * Initiates MPIN reset by sending OTP to registered mobile number.
+     */
+    @PostMapping("/forgot-mpin")
+    public Map<String, Object> forgotMpin(@RequestBody ApiDtos.ForgotMpinRequest request, HttpServletRequest servletRequest) {
+        return authService.forgotMpin(request, servletRequest);
+    }
+
+    /**
+     * POST /api/auth/verify-reset-mpin-otp
+     * Verifies the OTP sent for MPIN reset and returns a reset token.
+     */
+    @PostMapping("/verify-reset-mpin-otp")
+    public Map<String, Object> verifyResetMpinOtp(@RequestBody ApiDtos.VerifyResetMpinOtpRequest request) {
+        return authService.verifyResetMpinOtp(request);
+    }
+
+    /**
+     * POST /api/auth/reset-mpin
+     * Resets the MPIN using the verified reset token or mobile number.
+     */
+    @PostMapping("/reset-mpin")
+    public Map<String, Object> resetMpin(@RequestBody ApiDtos.ResetMpinRequest request) {
+        return authService.resetMpin(request);
+    }
+
+    /**
+     * POST /api/auth/change-mpin
+     * Changes MPIN for an authenticated user after verifying their current MPIN.
+     */
+    @PostMapping("/change-mpin")
+    public Map<String, Object> changeMpin(@RequestBody ApiDtos.ChangeMpinRequest request) {
+        return authService.changeMpin(currentUserService.requireCurrentUser(), request);
+    }
+
+    /**
      * POST /api/auth/activate
      * Activates a newly registered account after KYC and bank verification.
      * Called by Android app after onboarding completion.
@@ -145,3 +181,4 @@ public class AuthController {
         return authService.validateReferralCode(code);
     }
 }
+

@@ -1,5 +1,7 @@
 package com.anushabazaar.backend.controller;
 
+import com.anushabazaar.backend.dto.ApiDtos;
+import com.anushabazaar.backend.service.AuthService;
 import com.anushabazaar.backend.service.CurrentUserService;
 import com.anushabazaar.backend.service.PlatformService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,18 +14,25 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/kyc")
-@PreAuthorize("hasRole('INVESTOR')")
 public class KycController {
 
     private final PlatformService platformService;
+    private final AuthService authService;
     private final CurrentUserService currentUserService;
 
-    public KycController(PlatformService platformService, CurrentUserService currentUserService) {
+    public KycController(PlatformService platformService, AuthService authService, CurrentUserService currentUserService) {
         this.platformService = platformService;
+        this.authService = authService;
         this.currentUserService = currentUserService;
     }
 
+    @PostMapping("/pan/verify")
+    public Map<String, Object> verifyPan(@RequestBody ApiDtos.VerifyPanRequest request) {
+        return authService.verifyPan(request);
+    }
+
     @PostMapping("/submit")
+    @PreAuthorize("hasRole('INVESTOR')")
     public Object submit(@RequestParam("panCardImage") MultipartFile panCardImage,
                          @RequestParam("aadhaarFrontImage") MultipartFile aadhaarFrontImage,
                          @RequestParam("aadhaarBackImage") MultipartFile aadhaarBackImage,
@@ -34,7 +43,9 @@ public class KycController {
     }
 
     @GetMapping("/status")
+    @PreAuthorize("hasRole('INVESTOR')")
     public Map<String, Object> status() {
         return platformService.getOwnKycStatus(currentUserService.requireCurrentUser());
     }
 }
+

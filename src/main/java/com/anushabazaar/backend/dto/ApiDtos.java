@@ -99,6 +99,22 @@ public final class ApiDtos {
     public record ChangePasswordRequest(@NotBlank String currentPassword, @Size(min = 8) String newPassword) {
     }
 
+    public record ForgotMpinRequest(String mobileNumber, String phone) {
+    }
+
+    public record VerifyResetMpinOtpRequest(String mobileNumber, String phone, String otp, String code) {
+    }
+
+    public record ResetMpinRequest(String mobileNumber, String phone, String resetToken, String token, String newMpin, String mpin) {
+    }
+
+    public record ChangeMpinRequest(String currentMpin, String newMpin) {
+    }
+
+    public record VerifyPanRequest(String panNumber, String pan) {
+    }
+
+
     public record KycDecisionRequest(String reason, String adminNotes) {
     }
 
