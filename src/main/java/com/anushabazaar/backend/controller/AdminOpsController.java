@@ -44,10 +44,25 @@ public class AdminOpsController {
         return platformService.getAllUsers();
     }
 
+    @GetMapping("/api/admin/users/{id}/360")
+    public Object getUser360(@PathVariable("id") String id) {
+        return platformService.getUser360(id);
+    }
+
     @PostMapping("/api/admin/users/{id}/suspend")
     public Object suspend(@PathVariable("id") String id, @RequestBody(required = false) ApiDtos.SuspendUserRequest request, HttpServletRequest servletRequest) {
         return platformService.suspendUser(currentUserService.requireCurrentUser(), id,
                 request == null ? new ApiDtos.SuspendUserRequest("Suspended by admin") : request, servletRequest);
+    }
+
+    @PostMapping("/api/admin/users/{id}/block")
+    public Object block(@PathVariable("id") String id, @RequestBody(required = false) ApiDtos.SuspendUserRequest request, HttpServletRequest servletRequest) {
+        return platformService.blockUser(currentUserService.requireCurrentUser(), id, request, servletRequest);
+    }
+
+    @PostMapping("/api/admin/users/{id}/unblock")
+    public Object unblock(@PathVariable("id") String id, HttpServletRequest servletRequest) {
+        return platformService.unblockUser(currentUserService.requireCurrentUser(), id, servletRequest);
     }
 
     @GetMapping("/api/admin/fraud-alerts")

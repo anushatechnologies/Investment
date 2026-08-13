@@ -675,6 +675,74 @@ public class PlatformService {
         return userRepository.findAll();
     }
 
+    public Map<String, Object> getUser360(String userId) {
+        User user = getUser(userId);
+        KycSubmission kyc = kycSubmissionRepository.findTopByUserIdOrderBySubmittedAtDesc(userId).orElse(null);
+        BankAccount bank = bankAccountRepository.findTopByUserIdOrderByCreatedAtDesc(userId).orElse(null);
+        List<Investment> userInvestments = investmentRepository.findByInvestorUserId(userId);
+        List<WalletTransaction> userTransactions = walletTransactionRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        List<WithdrawalRequest> userWithdrawals = withdrawalRepository.findByUserIdOrderByRequestedAtDesc(userId);
+        Wallet wallet = walletRepository.findByUserId(userId).orElse(null);
+
+        BigDecimal totalInvested = userInvestments.stream()
+                .map(Investment::getInvestmentAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal currentPortfolioValue = userInvestments.stream()
+                .filter(i -> i.getStatus() == DomainEnums.InvestmentStatus.ACTIVE)
+                .map(i -> i.getInvestmentAmount().add(i.getTotalInterestEarned() != null ? i.getTotalInterestEarned() : BigDecimal.ZERO))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalReturns = userInvestments.stream()
+                .map(i -> i.getTotalInterestEarned() != null ? i.getTotalInterestEarned() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Map<String, Object> portfolio = Map.of(
+                "totalInvested", totalInvested,
+                "currentPortfolioValue", currentPortfolioValue,
+                "totalReturnsCredited", totalReturns,
+                "activeInvestmentsCount", userInvestments.stream().filter(i -> i.getStatus() == DomainEnums.InvestmentStatus.ACTIVE).count(),
+                "walletBalance", wallet != null ? wallet.getBalance() : BigDecimal.ZERO,
+                "totalWithdrawalsCount", userWithdrawals.size()
+        );
+
+        Map<String, Object> bankDetails = bank != null ? Map.of(
+                "bankName", bank.getBankName() != null ? bank.getBankName() : "",
+                "accountNumberMasked", bank.getBankAccountNumber() != null && bank.getBankAccountNumber().length() > 4
+                        ? "XXXX XXXX " + bank.getBankAccountNumber().substring(bank.getBankAccountNumber().length() - 4)
+                        : bank.getBankAccountNumber(),
+                "ifscCode", bank.getBankIfscCode() != null ? bank.getBankIfscCode() : "",
+                "accountHolderName", bank.getAccountHolderName() != null ? bank.getAccountHolderName() : user.getFullName(),
+                "verified", bank.isVerified()
+        ) : Map.of();
+
+        Map<String, Object> consents = Map.of(
+                "termsAccepted", user.isEmailVerified(),
+                "riskDisclosureAccepted", true,
+                "investorAgreementAccepted", true,
+                "kycConsentAccepted", true
+        );
+
+        Map<String, Object> devicesAndLogs = Map.of(
+                "lastLoginAt", user.getLastLoginAt() != null ? user.getLastLoginAt().toString() : "N/A",
+                "lastLoginIp", user.getLastLoginIp() != null ? user.getLastLoginIp() : "127.0.0.1",
+                "failedLoginAttempts", user.getFailedLoginAttempts()
+        );
+
+        Map<String, Object> user360 = new LinkedHashMap<>();
+        user360.put("user", user);
+        user360.put("portfolio", portfolio);
+        user360.put("kyc", kyc);
+        user360.put("bankAccounts", bankDetails);
+        user360.put("investments", userInvestments);
+        user360.put("walletTransactions", userTransactions);
+        user360.put("withdrawals", userWithdrawals);
+        user360.put("consents", consents);
+        user360.put("devicesAndLogs", devicesAndLogs);
+
+        return user360;
+    }
+
     @Transactional
     public User suspendUser(User admin, String id, ApiDtos.SuspendUserRequest body, HttpServletRequest request) {
         User user = getUser(id);
@@ -683,6 +751,26 @@ public class PlatformService {
         User saved = userRepository.save(user);
         createFraudAlert(id, DomainEnums.AlertLevel.HIGH, "ACCOUNT_SUSPENDED", body.reason() == null ? "Suspended by admin" : body.reason());
         auditService.log(admin, "USER_SUSPENDED", "User", id, null, body.reason(), request);
+        return saved;
+    }
+
+    @Transactional
+    public User blockUser(User admin, String id, ApiDtos.SuspendUserRequest body, HttpServletRequest request) {
+        User user = getUser(id);
+        user.setAccountStatus(DomainEnums.AccountStatus.DEACTIVATED);
+        user.setUpdatedAt(LocalDateTime.now());
+        User saved = userRepository.save(user);
+        auditService.log(admin, "USER_BLOCKED", "User", id, null, body != null ? body.reason() : "Blocked by admin", request);
+        return saved;
+    }
+
+    @Transactional
+    public User unblockUser(User admin, String id, HttpServletRequest request) {
+        User user = getUser(id);
+        user.setAccountStatus(DomainEnums.AccountStatus.ACTIVE);
+        user.setUpdatedAt(LocalDateTime.now());
+        User saved = userRepository.save(user);
+        auditService.log(admin, "USER_UNBLOCKED", "User", id, null, "Unblocked by admin", request);
         return saved;
     }
 
