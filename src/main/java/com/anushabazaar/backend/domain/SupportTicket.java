@@ -60,4 +60,7 @@ public class SupportTicket {
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     public LocalDateTime getResolvedAt() { return resolvedAt; }
     public void setResolvedAt(LocalDateTime resolvedAt) { this.resolvedAt = resolvedAt; }
+    public void setAssignedAdminId(String adminId) { this.respondedByAdminId = adminId; }
+    public void setAdminResponse(String reply) { this.adminReply = reply; }
+    public void setRespondedAt(LocalDateTime respondedAt) { this.updatedAt = respondedAt; }
 }

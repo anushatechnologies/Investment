@@ -32,9 +32,12 @@ public class PlatformService {
 
     private final UserRepository userRepository;
     private final KycSubmissionRepository kycSubmissionRepository;
+    private final BankAccountRepository bankAccountRepository;
     private final InvestmentPlanRepository planRepository;
     private final InvestmentRepository investmentRepository;
     private final PaymentReceiptRepository paymentReceiptRepository;
+    private final RazorpayPaymentRepository razorpayPaymentRepository;
+    private final RazorpayGatewayService razorpayGatewayService;
     private final WalletRepository walletRepository;
     private final WalletTransactionRepository walletTransactionRepository;
     private final WithdrawalRequestRepository withdrawalRepository;
@@ -50,9 +53,12 @@ public class PlatformService {
 
     public PlatformService(UserRepository userRepository,
                            KycSubmissionRepository kycSubmissionRepository,
+                           BankAccountRepository bankAccountRepository,
                            InvestmentPlanRepository planRepository,
                            InvestmentRepository investmentRepository,
                            PaymentReceiptRepository paymentReceiptRepository,
+                           RazorpayPaymentRepository razorpayPaymentRepository,
+                           RazorpayGatewayService razorpayGatewayService,
                            WalletRepository walletRepository,
                            WalletTransactionRepository walletTransactionRepository,
                            WithdrawalRequestRepository withdrawalRepository,
@@ -67,9 +73,12 @@ public class PlatformService {
                            ReceiptService receiptService) {
         this.userRepository = userRepository;
         this.kycSubmissionRepository = kycSubmissionRepository;
+        this.bankAccountRepository = bankAccountRepository;
         this.planRepository = planRepository;
         this.investmentRepository = investmentRepository;
         this.paymentReceiptRepository = paymentReceiptRepository;
+        this.razorpayPaymentRepository = razorpayPaymentRepository;
+        this.razorpayGatewayService = razorpayGatewayService;
         this.walletRepository = walletRepository;
         this.walletTransactionRepository = walletTransactionRepository;
         this.withdrawalRepository = withdrawalRepository;
@@ -664,6 +673,24 @@ public class PlatformService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ledger transaction not found"));
     }
 
+    private WalletTransaction createWalletTransaction(Wallet wallet, String userId, DomainEnums.WalletTransactionType type,
+                                                       DomainEnums.Direction direction, BigDecimal amount, String refId, String desc, String createdBy) {
+        WalletTransaction txn = new WalletTransaction();
+        txn.setId("TXN-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
+        txn.setWalletId(wallet != null ? wallet.getId() : null);
+        txn.setUserId(userId);
+        txn.setTransactionType(type);
+        txn.setDirection(direction);
+        txn.setAmount(amount);
+        txn.setBalanceBefore(wallet != null ? wallet.getAvailableBalance() : BigDecimal.ZERO);
+        txn.setBalanceAfter(wallet != null ? wallet.getAvailableBalance() : BigDecimal.ZERO);
+        txn.setReferenceId(refId);
+        txn.setDescription(desc);
+        txn.setCreatedAt(LocalDateTime.now());
+        txn.setCreatedBy(createdBy);
+        return walletTransactionRepository.save(txn);
+    }
+
     @Transactional
     public WalletTransaction adjustLedgerBalance(User admin, ApiDtos.AdminWalletAdjustRequest body, HttpServletRequest request) {
         Wallet wallet = getWalletByUserId(body.userId());
@@ -879,12 +906,12 @@ public class PlatformService {
                     long count = activeInvestments.stream()
                             .filter(inv -> inv.getInvestmentPlanId() != null && inv.getInvestmentPlanId().equals(plan.getId()))
                             .count();
-                    return Map.of(
-                            "planId", plan.getId(),
-                            "planName", plan.getPlanName(),
-                            "amount", amount.compareTo(BigDecimal.ZERO) > 0 ? amount : new BigDecimal("25000000"),
-                            "investorCount", count > 0 ? count : 85
-                    );
+                    Map<String, Object> itemMap = new LinkedHashMap<>();
+                    itemMap.put("planId", plan.getId());
+                    itemMap.put("planName", plan.getPlanName());
+                    itemMap.put("amount", amount.compareTo(BigDecimal.ZERO) > 0 ? amount : new BigDecimal("25000000"));
+                    itemMap.put("investorCount", count > 0 ? count : 85);
+                    return itemMap;
                 })
                 .collect(Collectors.toList());
 
@@ -1450,9 +1477,9 @@ public class PlatformService {
                 WalletTransaction txn = new WalletTransaction();
                 txn.setId("TXN-" + UUID.randomUUID().toString().replace("-", "").substring(0, 10));
                 txn.setUserId(inv.getInvestorUserId());
-                txn.setTransactionType(DomainEnums.TransactionType.REFUND_CREDIT);
+                txn.setTransactionType(DomainEnums.WalletTransactionType.REFUND_CREDIT);
                 txn.setAmount(request.amount() != null ? request.amount() : payment.getAmount());
-                txn.setDirection("CREDIT");
+                txn.setDirection(DomainEnums.Direction.CREDIT);
                 txn.setReferenceId(payment.getId());
                 txn.setDescription("Razorpay Refund: " + request.reason());
                 walletTransactionRepository.save(txn);

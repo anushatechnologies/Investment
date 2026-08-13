@@ -34,6 +34,8 @@ public final class DomainEnums {
         PENDING_RECEIPT,
         RECEIPT_UPLOADED,
         ACTIVE,
+        PAUSED,
+        CLOSED,
         MATURED,
         CANCELLED,
         EARLY_WITHDRAWAL,
@@ -59,7 +61,21 @@ public final class DomainEnums {
         REFERRAL_COMMISSION,
         WITHDRAWAL_DEBIT,
         INVESTMENT_CREDIT,
+        INVESTMENT_DEBIT,
         REFUND,
+        REFUND_CREDIT,
+        PENALTY,
+        ADMIN_ADJUSTMENT
+    }
+
+    public enum TransactionType {
+        INTEREST_CREDIT,
+        REFERRAL_COMMISSION,
+        WITHDRAWAL_DEBIT,
+        INVESTMENT_CREDIT,
+        INVESTMENT_DEBIT,
+        REFUND,
+        REFUND_CREDIT,
         PENALTY,
         ADMIN_ADJUSTMENT
     }

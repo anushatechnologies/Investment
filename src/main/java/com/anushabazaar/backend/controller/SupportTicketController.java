@@ -98,7 +98,7 @@ public class SupportTicketController {
     public SupportTicket assignTicket(@PathVariable("id") String id, @RequestBody Map<String, String> body) {
         SupportTicket ticket = supportTicketRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Support ticket not found"));
-        ticket.setAssignedAdminId(body.getOrDefault("assignedAdminId", currentUserService.requireCurrentUser().getId()));
+        ticket.setRespondedByAdminId(body.getOrDefault("assignedAdminId", currentUserService.requireCurrentUser().getId()));
         ticket.setStatus(DomainEnums.SupportTicketStatus.IN_PROGRESS);
         ticket.setUpdatedAt(LocalDateTime.now());
         return supportTicketRepository.save(ticket);
@@ -113,8 +113,7 @@ public class SupportTicketController {
         if (response == null || response.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "response text is required");
         }
-        ticket.setAdminResponse(response.trim());
-        ticket.setRespondedAt(LocalDateTime.now());
+        ticket.setAdminReply(response.trim());
         ticket.setRespondedByAdminId(currentUserService.requireCurrentUser().getId());
         ticket.setStatus(DomainEnums.SupportTicketStatus.RESOLVED);
         ticket.setUpdatedAt(LocalDateTime.now());

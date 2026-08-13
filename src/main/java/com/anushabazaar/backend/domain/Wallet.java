@@ -24,6 +24,7 @@ public class Wallet {
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
     public BigDecimal getAvailableBalance() { return availableBalance; }
+    public BigDecimal getBalance() { return availableBalance != null ? availableBalance : BigDecimal.ZERO; }
     public void setAvailableBalance(BigDecimal availableBalance) { this.availableBalance = availableBalance; }
     public BigDecimal getTotalCredited() { return totalCredited; }
     public void setTotalCredited(BigDecimal totalCredited) { this.totalCredited = totalCredited; }
