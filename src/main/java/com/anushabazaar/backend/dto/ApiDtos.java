@@ -62,6 +62,29 @@ public final class ApiDtos {
     ) {
     }
 
+    public record AdminLoginRequest(
+            String email,
+            String username,
+            String password,
+            String twoFactorCode
+    ) {
+    }
+
+    public record Verify2faRequest(
+            String tempToken,
+            String code
+    ) {
+    }
+
+    public record CreateAdminStaffRequest(
+            String fullName,
+            String email,
+            String mobileNumber,
+            String password,
+            DomainEnums.Role role
+    ) {
+    }
+
     public record SendOtpRequest(
             String email,
             String mobileNumber,

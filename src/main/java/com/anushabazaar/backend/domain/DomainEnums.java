@@ -8,6 +8,11 @@ public final class DomainEnums {
     public enum Role {
         SUPER_ADMIN,
         ADMIN,
+        FINANCE,
+        KYC_MANAGER,
+        OPERATIONS,
+        SUPPORT,
+        AUDITOR,
         INVESTOR
     }
 
