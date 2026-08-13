@@ -54,11 +54,8 @@ public class EmailService {
             mailSender.send(message);
             return true;
         } catch (MailException ex) {
-            throw new ResponseStatusException(
-                    HttpStatus.SERVICE_UNAVAILABLE,
-                    "Email delivery failed. Check SMTP configuration.",
-                    ex
-            );
+            System.err.println("[EmailService] Email delivery failed: " + ex.getMessage());
+            return false;
         }
     }
 }
