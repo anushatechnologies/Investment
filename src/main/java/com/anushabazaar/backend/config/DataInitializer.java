@@ -37,20 +37,35 @@ public class DataInitializer {
                 walletRepository.save(newWallet(admin.getId()));
             }
             if (planRepository.count() == 0) {
-                InvestmentPlan plan = new InvestmentPlan();
-                plan.setId(UUID.randomUUID().toString());
-                plan.setPlanName("Gold Plan");
-                plan.setDescription("Default seeded investment plan");
-                plan.setMinimumAmount(new BigDecimal("5000"));
-                plan.setMaximumAmount(new BigDecimal("1000000"));
-                plan.setLockInMonths(6);
-                plan.setMonthlyInterestRate(new BigDecimal("1.5"));
-                plan.setActive(true);
-                plan.setCreatedByAdminId("SYSTEM");
-                plan.setCreatedAt(LocalDateTime.now());
-                plan.setLastModifiedAt(LocalDateTime.now());
-                plan.setLastModifiedBy("SYSTEM");
-                planRepository.save(plan);
+                InvestmentPlan plan1 = new InvestmentPlan();
+                plan1.setId(UUID.randomUUID().toString());
+                plan1.setPlanName("Anusha Standard Growth Plan");
+                plan1.setDescription("Standard 6-Month Lock-in Investment Plan with 10% Monthly Payout credited to Wallet.");
+                plan1.setMinimumAmount(new BigDecimal("10000"));
+                plan1.setMaximumAmount(new BigDecimal("1000000"));
+                plan1.setLockInMonths(6);
+                plan1.setMonthlyInterestRate(new BigDecimal("10.0"));
+                plan1.setActive(true);
+                plan1.setCreatedByAdminId("SYSTEM");
+                plan1.setCreatedAt(LocalDateTime.now());
+                plan1.setLastModifiedAt(LocalDateTime.now());
+                plan1.setLastModifiedBy("SYSTEM");
+                planRepository.save(plan1);
+
+                InvestmentPlan plan2 = new InvestmentPlan();
+                plan2.setId(UUID.randomUUID().toString());
+                plan2.setPlanName("Anusha Prime Investor Plan");
+                plan2.setDescription("High-Yield 12-Month Lock-in Investment Plan with 12% Monthly Payout for high net-worth investors.");
+                plan2.setMinimumAmount(new BigDecimal("100000"));
+                plan2.setMaximumAmount(new BigDecimal("5000000"));
+                plan2.setLockInMonths(12);
+                plan2.setMonthlyInterestRate(new BigDecimal("12.0"));
+                plan2.setActive(true);
+                plan2.setCreatedByAdminId("SYSTEM");
+                plan2.setCreatedAt(LocalDateTime.now());
+                plan2.setLastModifiedAt(LocalDateTime.now());
+                plan2.setLastModifiedBy("SYSTEM");
+                planRepository.save(plan2);
             }
         };
     }
