@@ -114,7 +114,7 @@ public final class ApiDtos {
     public record RefreshTokenRequest(@NotBlank String refreshToken) {
     }
 
-    public record ForgotPasswordRequest(@Email String email) {
+    public record ForgotPasswordRequest(String email, String mobileNumber, String phone, String identifier) {
     }
 
     public record ResetPasswordRequest(@NotBlank String token, @Size(min = 8) String newPassword) {
@@ -193,7 +193,16 @@ public final class ApiDtos {
     public record SuspendUserRequest(String reason) {
     }
 
-    public record UpdateNotificationPreferencesRequest(boolean email, boolean whatsapp, boolean sms, boolean push) {
+    public record UpdateNotificationPreferencesRequest(
+            Boolean email,
+            Boolean emailUpdates,
+            Boolean whatsapp,
+            Boolean marketing,
+            Boolean sms,
+            Boolean smsUpdates,
+            Boolean push,
+            Boolean pushNotifications
+    ) {
     }
 
     public record VerifyRazorpayPaymentRequest(
@@ -210,7 +219,13 @@ public final class ApiDtos {
     ) {
     }
 
-    public record ValidateCouponRequest(String code, BigDecimal amount) {
+    public record ValidateCouponRequest(
+            String code,
+            String couponCode,
+            BigDecimal amount,
+            BigDecimal investmentAmount,
+            String investmentPlanId
+    ) {
     }
 
     public record CreateCouponRequest(String code, String title, String type, BigDecimal valueAmount, BigDecimal minimumInvestmentAmount) {

@@ -30,6 +30,11 @@ public class WalletWithdrawalController {
         return platformService.getWalletTransactions(currentUserService.requireCurrentUser());
     }
 
+    @GetMapping("/api/withdrawals/settings")
+    public Object withdrawalSettings() {
+        return platformService.getWithdrawalSettings();
+    }
+
     @PostMapping("/api/withdrawals/request")
     public Object requestWithdrawal(@Valid @RequestBody ApiDtos.RequestWithdrawalRequest request, HttpServletRequest servletRequest) {
         return platformService.requestWithdrawal(currentUserService.requireCurrentUser(), request, servletRequest);

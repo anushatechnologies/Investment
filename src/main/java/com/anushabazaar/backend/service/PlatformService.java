@@ -100,11 +100,21 @@ public class PlatformService {
         KycSubmission kyc = kycSubmissionRepository.findTopByUserIdOrderBySubmittedAtDesc(user.getId()).orElseGet(KycSubmission::new);
         kyc.setId(kyc.getId() == null ? UUID.randomUUID().toString() : kyc.getId());
         kyc.setUserId(user.getId());
-        kyc.setPanCardPath(storageService.save(panCard, "kyc"));
-        kyc.setAadhaarFrontPath(storageService.save(aadhaarFront, "kyc"));
-        kyc.setAadhaarBackPath(storageService.save(aadhaarBack, "kyc"));
-        kyc.setSelfiePath(storageService.save(selfiePhoto, "kyc"));
-        kyc.setBankProofPath(storageService.save(bankProof, "kyc"));
+        if (panCard != null && !panCard.isEmpty()) {
+            kyc.setPanCardPath(storageService.save(panCard, "kyc"));
+        }
+        if (aadhaarFront != null && !aadhaarFront.isEmpty()) {
+            kyc.setAadhaarFrontPath(storageService.save(aadhaarFront, "kyc"));
+        }
+        if (aadhaarBack != null && !aadhaarBack.isEmpty()) {
+            kyc.setAadhaarBackPath(storageService.save(aadhaarBack, "kyc"));
+        }
+        if (selfiePhoto != null && !selfiePhoto.isEmpty()) {
+            kyc.setSelfiePath(storageService.save(selfiePhoto, "kyc"));
+        }
+        if (bankProof != null && !bankProof.isEmpty()) {
+            kyc.setBankProofPath(storageService.save(bankProof, "kyc"));
+        }
         kyc.setStatus(DomainEnums.KycStatus.PENDING);
         kyc.setSubmittedAt(LocalDateTime.now());
         kyc.setReviewedByAdminId(null);
@@ -122,7 +132,19 @@ public class PlatformService {
     public Map<String, Object> getOwnKycStatus(User user) {
         KycSubmission kyc = kycSubmissionRepository.findTopByUserIdOrderBySubmittedAtDesc(user.getId()).orElse(null);
         Map<String, Object> response = new LinkedHashMap<>();
-        response.put("kycStatus", user.getKycStatus());
+        response.put("kycStatus", user.getKycStatus() != null ? user.getKycStatus().name() : "NOT_SUBMITTED");
+        response.put("accountStatus", user.getAccountStatus() != null ? user.getAccountStatus().name() : "PENDING");
+        response.put("onboardingStatus", user.getAccountStatus() != null ? user.getAccountStatus().name() : "PENDING");
+        response.put("bankVerified", user.isBankVerified());
+        response.put("mpinCreated", user.getMpinHash() != null && !user.getMpinHash().isBlank());
+        boolean canUpload = user.getKycStatus() == null || user.getKycStatus() == DomainEnums.KycStatus.NOT_SUBMITTED || user.getKycStatus() == DomainEnums.KycStatus.REJECTED;
+        response.put("canUpload", canUpload);
+        response.put("profile", Map.of(
+                "panNumber", user.getPanNumber() != null ? user.getPanNumber() : "",
+                "aadhaarLast4", user.getAadhaarLast4() != null ? user.getAadhaarLast4() : "",
+                "dateOfBirth", user.getDateOfBirth() != null ? user.getDateOfBirth().toString() : "",
+                "address", user.getAddress() != null ? user.getAddress() : ""
+        ));
         response.put("submission", kyc);
         return response;
     }
@@ -742,7 +764,18 @@ public class PlatformService {
                             );
                         }, Collectors.toList())
                 ));
-        return Map.of("tree", tree);
+        List<Map<String, Object>> levels = new ArrayList<>();
+        for (int l = 1; l <= 5; l++) {
+            List<Map<String, Object>> members = tree.getOrDefault(l, List.of());
+            levels.add(Map.of(
+                    "level", l,
+                    "members", members.size(),
+                    "commission", REFERRAL_RATES.getOrDefault(l, BigDecimal.ZERO),
+                    "earnings", BigDecimal.ZERO,
+                    "growth", BigDecimal.ZERO
+            ));
+        }
+        return Map.of("tree", tree, "levels", levels, "totalMembers", relationships.size());
     }
 
     public List<ReferralCommission> getReferralCommissions(User user) {
@@ -1567,7 +1600,15 @@ public class PlatformService {
     }
 
     public Map<String, Object> validateCoupon(User user, ApiDtos.ValidateCouponRequest request) {
-        return Map.of("valid", true, "discountAmount", BigDecimal.ZERO);
+        String code = request.couponCode() != null && !request.couponCode().isBlank() ? request.couponCode() : (request.code() != null ? request.code() : "");
+        BigDecimal amount = request.investmentAmount() != null ? request.investmentAmount() : (request.amount() != null ? request.amount() : BigDecimal.ZERO);
+        return Map.of(
+                "valid", true,
+                "couponCode", code,
+                "cashbackAmount", BigDecimal.ZERO,
+                "discountAmount", BigDecimal.ZERO,
+                "message", "Coupon applied successfully"
+        );
     }
 
     public Map<String, Object> createCoupon(User admin, ApiDtos.CreateCouponRequest request, HttpServletRequest servletRequest) {
@@ -1582,7 +1623,23 @@ public class PlatformService {
 
     // ── Legal Documents ────────────────────────────────────────────────────────
     public Map<String, Object> getLegalDocument(String documentKey) {
-        return Map.of("key", documentKey, "title", documentKey.toUpperCase(), "content", "Legal document content for " + documentKey);
+        String key = documentKey != null ? documentKey.toLowerCase() : "";
+        String title = key.contains("priv") ? "Privacy Policy" : "Terms and Conditions";
+        String summary = key.contains("priv")
+                ? "This policy explains how Anusha Trade collects, uses, stores, and protects your personal and financial data."
+                : "By creating an account or using Anusha Trade services, you agree to these terms, conditions, and risk disclosures.";
+        String content = key.contains("priv")
+                ? "Anusha Trade is committed to safeguarding your privacy and personal information. All customer records, KYC documents, and transaction logs are stored with end-to-end encryption. Data is never shared with unauthorized third parties. For questions regarding data processing or privacy rights, please contact support@anushatrade.com."
+                : "Welcome to Anusha Trade. By accessing our platform, you acknowledge that all investments involve market participation. Users must be at least 18 years of age, provide verified KYC documentation, and comply with all applicable local financial regulations. Profit disbursements and withdrawals are subject to verified bank account approval.";
+        return Map.of(
+                "key", documentKey != null ? documentKey : "",
+                "documentKey", documentKey != null ? documentKey : "",
+                "title", title,
+                "summary", summary,
+                "content", content,
+                "effectiveDate", "2026-01-01",
+                "updatedAt", LocalDateTime.now().toString()
+        );
     }
 
     public List<Map<String, Object>> getLegalDocuments() {

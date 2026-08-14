@@ -26,18 +26,18 @@ public class KycController {
         this.currentUserService = currentUserService;
     }
 
-    @PostMapping("/pan/verify")
+    @PostMapping({"/pan/verify", "/pan-verify"})
     public Map<String, Object> verifyPan(@RequestBody ApiDtos.VerifyPanRequest request) {
         return authService.verifyPan(request);
     }
 
     @PostMapping("/submit")
     @PreAuthorize("hasRole('INVESTOR')")
-    public Object submit(@RequestParam("panCardImage") MultipartFile panCardImage,
-                         @RequestParam("aadhaarFrontImage") MultipartFile aadhaarFrontImage,
-                         @RequestParam("aadhaarBackImage") MultipartFile aadhaarBackImage,
-                         @RequestParam("selfiePhoto") MultipartFile selfiePhoto,
-                         @RequestParam("bankPassbookOrStatement") MultipartFile bankPassbookOrStatement,
+    public Object submit(@RequestParam(value = "panCardImage", required = false) MultipartFile panCardImage,
+                         @RequestParam(value = "aadhaarFrontImage", required = false) MultipartFile aadhaarFrontImage,
+                         @RequestParam(value = "aadhaarBackImage", required = false) MultipartFile aadhaarBackImage,
+                         @RequestParam(value = "selfiePhoto", required = false) MultipartFile selfiePhoto,
+                         @RequestParam(value = "bankPassbookOrStatement", required = false) MultipartFile bankPassbookOrStatement,
                          HttpServletRequest request) throws IOException {
         return platformService.submitKyc(currentUserService.requireCurrentUser(), panCardImage, aadhaarFrontImage, aadhaarBackImage, selfiePhoto, bankPassbookOrStatement, request);
     }

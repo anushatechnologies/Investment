@@ -591,8 +591,18 @@ public class AuthService {
 
     @Transactional
     public Map<String, Object> forgotPassword(ApiDtos.ForgotPasswordRequest request) {
-        User user = userRepository.findByEmail(request.email().toLowerCase())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        String identifier = request.email() != null && !request.email().isBlank()
+                ? request.email()
+                : (request.mobileNumber() != null && !request.mobileNumber().isBlank()
+                        ? request.mobileNumber()
+                        : (request.phone() != null && !request.phone().isBlank()
+                                ? request.phone()
+                                : request.identifier()));
+        if (identifier == null || identifier.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mobile number or email is required");
+        }
+        User user = findUserByIdentifier(identifier)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found for given details"));
         TokenRecord token = issueToken(user.getId(), DomainEnums.TokenType.PASSWORD_RESET, 24);
         return Map.of("message", "Password reset token generated", "resetToken", token.getTokenValue());
     }
