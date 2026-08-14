@@ -1,11 +1,20 @@
 package com.anushabazaar.backend.controller;
 
+import com.anushabazaar.backend.domain.DomainEnums;
+import com.anushabazaar.backend.domain.SupportTicket;
 import com.anushabazaar.backend.dto.ApiDtos;
+import com.anushabazaar.backend.repository.SupportTicketRepository;
 import com.anushabazaar.backend.service.CurrentUserService;
 import com.anushabazaar.backend.service.PlatformService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
@@ -13,10 +22,12 @@ public class AdminOpsController {
 
     private final PlatformService platformService;
     private final CurrentUserService currentUserService;
+    private final SupportTicketRepository supportTicketRepository;
 
-    public AdminOpsController(PlatformService platformService, CurrentUserService currentUserService) {
+    public AdminOpsController(PlatformService platformService, CurrentUserService currentUserService, SupportTicketRepository supportTicketRepository) {
         this.platformService = platformService;
         this.currentUserService = currentUserService;
+        this.supportTicketRepository = supportTicketRepository;
     }
 
     @GetMapping("/api/admin/interest/rates")
@@ -118,12 +129,21 @@ public class AdminOpsController {
 
     @GetMapping("/api/admin/support/tickets")
     public Object supportTickets() {
-        return platformService.getAllSupportTickets();
+        return supportTicketRepository.findAllByOrderByCreatedAtDesc();
     }
 
     @PostMapping("/api/admin/support/tickets/{id}/respond")
     public Object respondSupportTicket(@PathVariable("id") String id, @RequestBody(required = false) Map<String, String> payload, HttpServletRequest servletRequest) {
-        return platformService.respondToSupportTicket(currentUserService.requireCurrentUser(), id, payload == null ? Map.of() : payload, servletRequest);
+        SupportTicket ticket = supportTicketRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Support ticket not found"));
+        String response = payload != null ? payload.get("response") : null;
+        if (response != null && !response.isBlank()) {
+            ticket.setAdminReply(response.trim());
+        }
+        ticket.setRespondedByAdminId(currentUserService.requireCurrentUser().getId());
+        ticket.setStatus(DomainEnums.SupportTicketStatus.RESOLVED);
+        ticket.setUpdatedAt(LocalDateTime.now());
+        return supportTicketRepository.save(ticket);
     }
 
     @GetMapping("/api/admin/audit-logs")

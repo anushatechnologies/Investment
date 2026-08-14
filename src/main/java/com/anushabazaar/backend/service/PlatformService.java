@@ -18,6 +18,7 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @Service
 public class PlatformService {
@@ -1310,12 +1311,61 @@ public class PlatformService {
 
     // ── Razorpay Integration ───────────────────────────────────────────────────
     public Map<String, Object> createRazorpayCheckoutOrder(User user, ApiDtos.ApplyInvestmentRequest request, HttpServletRequest servletRequest) {
-        Investment response = applyInvestment(user, request, servletRequest);
+        Investment investment = applyInvestment(user, request, servletRequest);
+        BigDecimal amount = request.investmentAmount();
+        String receiptRef = "INV-" + investment.getId().substring(0, Math.min(12, investment.getId().length()));
+        Map<String, Object> notes = new LinkedHashMap<>();
+        notes.put("investmentId", investment.getId());
+        notes.put("investorUserId", user.getId());
+        notes.put("planId", request.investmentPlanId());
+        notes.put("source", "anusha-trade-app");
+
+        Map<String, Object> order = razorpayGatewayService.createOrder(amount, "INR", receiptRef, notes);
+
+        String razorpayOrderId = String.valueOf(order.getOrDefault("id", ""));
+        String razorpayKey = razorpayGatewayService.properties().getKeyId();
+        String investorName = user.getFullName() != null ? user.getFullName() : user.getEmail();
+        String investorEmail = user.getEmail() != null ? user.getEmail() : "";
+        String investorContact = user.getMobileNumber() != null ? user.getMobileNumber() : "";
+
+        RazorpayPayment paymentRecord = new RazorpayPayment();
+        paymentRecord.setId(UUID.randomUUID().toString());
+        paymentRecord.setInvestmentId(investment.getId());
+        paymentRecord.setInvestorId(user.getId());
+        paymentRecord.setRazorpayOrderId(razorpayOrderId);
+        paymentRecord.setAmount(amount);
+        paymentRecord.setCurrency("INR");
+        paymentRecord.setStatus("CREATED");
+        paymentRecord.setCaptured(false);
+        paymentRecord.setCheckoutOrderCreatedAt(LocalDateTime.now());
+        paymentRecord.setOrderPayload(order.toString());
+        razorpayPaymentRepository.save(paymentRecord);
+
         return Map.of(
-                "orderId", "order_" + UUID.randomUUID().toString().replace("-", "").substring(0, 14),
-                "currency", "INR",
-                "amount", request.investmentAmount().multiply(new java.math.BigDecimal("100")),
-                "investmentDetails", response
+                "investment", Map.of(
+                        "id", investment.getId(),
+                        "status", investment.getStatus().name(),
+                        "investmentAmount", investment.getInvestmentAmount()
+                ),
+                "payment", Map.of(
+                        "id", paymentRecord.getId(),
+                        "investmentId", investment.getId(),
+                        "razorpayOrderId", razorpayOrderId,
+                        "amount", amount.multiply(new BigDecimal("100")).longValue(),
+                        "currency", "INR",
+                        "status", "CREATED"
+                ),
+                "checkout", Map.of(
+                        "keyId", razorpayKey,
+                        "orderId", razorpayOrderId,
+                        "amount", amount.multiply(new BigDecimal("100")).longValue(),
+                        "currency", "INR",
+                        "investorName", investorName,
+                        "investorEmail", investorEmail,
+                        "investorContact", investorContact,
+                        "planName", "Investment",
+                        "description", "Investment payment"
+                )
         );
     }
 
@@ -1325,10 +1375,39 @@ public class PlatformService {
         if (investmentId == null || investmentId.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Investment ID is required");
         }
+        if (request.razorpayOrderId() == null || request.razorpayPaymentId() == null || request.razorpaySignature() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay payment details are incomplete");
+        }
+
         Investment investment = getInvestment(investmentId);
         if (!user.getRole().name().contains("ADMIN") && !investment.getInvestorUserId().equals(user.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your investment");
         }
+
+        boolean signatureValid = razorpayGatewayService.verifyCheckoutSignature(
+                request.razorpayOrderId(),
+                request.razorpayPaymentId(),
+                request.razorpaySignature()
+        );
+        if (!signatureValid) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid Razorpay payment signature");
+        }
+
+        RazorpayPayment payment = razorpayPaymentRepository.findByInvestmentId(investmentId)
+                .orElseGet(RazorpayPayment::new);
+        payment.setId(payment.getId() == null ? UUID.randomUUID().toString() : payment.getId());
+        payment.setInvestmentId(investment.getId());
+        payment.setInvestorId(user.getId());
+        payment.setRazorpayOrderId(request.razorpayOrderId());
+        payment.setRazorpayPaymentId(request.razorpayPaymentId());
+        payment.setRazorpaySignature(request.razorpaySignature());
+        payment.setAmount(investment.getInvestmentAmount());
+        payment.setCurrency("INR");
+        payment.setStatus("CAPTURED");
+        payment.setCaptured(true);
+        payment.setPaymentCapturedAt(LocalDateTime.now());
+        payment.setSignatureVerifiedAt(LocalDateTime.now());
+        razorpayPaymentRepository.save(payment);
 
         investment.setStatus(DomainEnums.InvestmentStatus.ACTIVE);
         investment.setActivatedAt(LocalDateTime.now());
@@ -1369,7 +1448,7 @@ public class PlatformService {
         );
 
         Map<String, Object> paymentMap = Map.of(
-                "id", request.razorpayPaymentId() != null ? request.razorpayPaymentId() : "PAY_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8),
+                "id", request.razorpayPaymentId(),
                 "status", "SUCCESS",
                 "captured", true
         );
@@ -1755,25 +1834,25 @@ public class PlatformService {
                 .map(commission -> {
                     User beneficiary = getUser(commission.getBeneficiaryUserId());
                     User sourceInvestor = getUser(commission.getSourceInvestorId());
-                    return Map.<String, Object>of(
-                            "id", commission.getId(),
-                            "beneficiaryUserId", commission.getBeneficiaryUserId(),
-                            "beneficiaryName", beneficiary.getFullName() != null ? beneficiary.getFullName() : beneficiary.getEmail(),
-                            "sourceInvestorId", commission.getSourceInvestorId(),
-                            "sourceInvestorName", sourceInvestor.getFullName() != null ? sourceInvestor.getFullName() : sourceInvestor.getEmail(),
-                            "typeLabel", "Referral commission",
-                            "commissionType", "REFERRAL",
-                            "month", commission.getCommissionMonth(),
-                            "level", commission.getReferralLevel(),
-                            "rate", commission.getCommissionRate(),
-                            "sourceAmountLabel", "Investment interest",
-                            "sourceInterestAmount", commission.getSourceInterestAmount(),
-                            "sourceAmount", commission.getSourceInterestAmount(),
-                            "commissionAmount", commission.getCommissionAmount(),
-                            "status", commission.getStatus() != null ? commission.getStatus().name() : "CALCULATED",
-                            "skipReason", commission.getSkipReason(),
-                            "creditedAt", commission.getCreditedAt()
-                    );
+                    Map<String, Object> map = new LinkedHashMap<>();
+                    map.put("id", commission.getId());
+                    map.put("beneficiaryUserId", commission.getBeneficiaryUserId());
+                    map.put("beneficiaryName", beneficiary.getFullName() != null ? beneficiary.getFullName() : beneficiary.getEmail());
+                    map.put("sourceInvestorId", commission.getSourceInvestorId());
+                    map.put("sourceInvestorName", sourceInvestor.getFullName() != null ? sourceInvestor.getFullName() : sourceInvestor.getEmail());
+                    map.put("typeLabel", "Referral commission");
+                    map.put("commissionType", "REFERRAL");
+                    map.put("month", commission.getCommissionMonth());
+                    map.put("level", commission.getReferralLevel());
+                    map.put("rate", commission.getCommissionRate());
+                    map.put("sourceAmountLabel", "Investment interest");
+                    map.put("sourceInterestAmount", commission.getSourceInterestAmount());
+                    map.put("sourceAmount", commission.getSourceInterestAmount());
+                    map.put("commissionAmount", commission.getCommissionAmount());
+                    map.put("status", commission.getStatus() != null ? commission.getStatus().name() : "CALCULATED");
+                    map.put("skipReason", commission.getSkipReason());
+                    map.put("creditedAt", commission.getCreditedAt());
+                    return map;
                 })
                 .toList();
         return Map.of("commissions", commissions);
