@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -87,18 +88,43 @@ public class StorageService {
 
     public StoredFile loadForView(String pathStr) {
         try {
+            if (pathStr == null || pathStr.isBlank()) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File path is empty");
+            }
+            if (pathStr.startsWith("http://") || pathStr.startsWith("https://")) {
+                Resource resource = new UrlResource(pathStr);
+                if (resource.exists() || resource.isReadable()) {
+                    return new StoredFile(resource, "image/jpeg", -1);
+                }
+            }
+
             Path file = Path.of(pathStr);
+            if (!file.isAbsolute()) {
+                file = storageRoot.resolve(pathStr);
+            }
+            if (!Files.exists(file)) {
+                // Try resolving just filename inside category subfolders
+                String filename = Path.of(pathStr).getFileName().toString();
+                Path kycFile = storageRoot.resolve("kyc").resolve(filename);
+                if (Files.exists(kycFile)) {
+                    file = kycFile;
+                }
+            }
+
             Resource resource = new UrlResource(file.toUri());
             if (resource.exists() || resource.isReadable()) {
                 String contentType = Files.probeContentType(file);
-                long contentLength = Files.size(file);
+                if (contentType == null) {
+                    contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
+                }
+                long contentLength = Files.exists(file) ? Files.size(file) : -1;
                 return new StoredFile(resource, contentType, contentLength);
             }
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found: " + pathStr);
         } catch (ResponseStatusException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found", ex);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found: " + pathStr, ex);
         }
     }
 }

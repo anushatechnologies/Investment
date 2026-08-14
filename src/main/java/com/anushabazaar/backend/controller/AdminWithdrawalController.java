@@ -20,6 +20,16 @@ public class AdminWithdrawalController {
         this.currentUserService = currentUserService;
     }
 
+    @GetMapping("/settings")
+    public Object settings() {
+        return platformService.getWithdrawalSettings();
+    }
+
+    @PutMapping("/settings")
+    public Object updateSettings(@RequestBody Map<String, Object> settings, HttpServletRequest servletRequest) {
+        return platformService.updateWithdrawalSettings(currentUserService.requireCurrentUser(), settings, servletRequest);
+    }
+
     @GetMapping("/pending")
     public Object pending() {
         return platformService.getPendingWithdrawals();

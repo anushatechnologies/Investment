@@ -166,14 +166,20 @@ public class PlatformService {
     }
 
     public Map<String, String> getKycDocuments(String id) {
-        KycSubmission kyc = getKyc(id);
-        return Map.of(
-                "panCard", kyc.getPanCardPath(),
-                "aadhaarFront", kyc.getAadhaarFrontPath(),
-                "aadhaarBack", kyc.getAadhaarBackPath(),
-                "selfie", kyc.getSelfiePath(),
-                "bankProof", kyc.getBankProofPath()
-        );
+        KycSubmission kyc = kycSubmissionRepository.findById(id)
+                .or(() -> kycSubmissionRepository.findTopByUserIdOrderBySubmittedAtDesc(id))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "KYC submission not found"));
+        Map<String, String> docs = new HashMap<>();
+        if (kyc.getPanCardPath() != null) docs.put("panCard", kyc.getPanCardPath());
+        if (kyc.getAadhaarFrontPath() != null) docs.put("aadhaarFront", kyc.getAadhaarFrontPath());
+        if (kyc.getAadhaarBackPath() != null) docs.put("aadhaarBack", kyc.getAadhaarBackPath());
+        if (kyc.getSelfiePath() != null) docs.put("selfie", kyc.getSelfiePath());
+        if (kyc.getBankProofPath() != null) docs.put("bankProof", kyc.getBankProofPath());
+        return docs;
+    }
+
+    public Map<String, String> getUserKycDocuments(String userId) {
+        return getKycDocuments(userId);
     }
 
     public List<KycSubmission> getAllKyc(String status) {
@@ -1510,6 +1516,369 @@ public class PlatformService {
     public Map<String, Object> updateLegalDocument(User admin, String documentKey, ApiDtos.UpdateLegalDocumentRequest body, HttpServletRequest request) {
         auditService.log(admin, "UPDATE_LEGAL_DOCUMENT", "SUCCESS", "Updated legal document " + documentKey, request);
         return Map.of("key", documentKey, "title", body.title(), "updated", true);
+    }
+
+    private volatile Map<Integer, BigDecimal> referralRateSettings = new LinkedHashMap<>(Map.of(
+            1, new BigDecimal("5"),
+            2, new BigDecimal("4"),
+            3, new BigDecimal("3"),
+            4, new BigDecimal("2"),
+            5, new BigDecimal("1")
+    ));
+
+    private volatile Map<String, Object> withdrawalSettingsState = new LinkedHashMap<>(Map.of(
+            "withdrawalEnabled", true,
+            "minimumWithdrawalAmount", new BigDecimal("1000"),
+            "maximumWithdrawalAmount", BigDecimal.ZERO,
+            "dailyWithdrawalLimit", BigDecimal.ZERO,
+            "monthlyWithdrawalLimit", BigDecimal.ZERO,
+            "largeWithdrawalAlertThreshold", new BigDecimal("50000"),
+            "processingTime", "24 hours",
+            "preferredMethod", "Bank Transfer"
+    ));
+
+    private BigDecimal asBigDecimal(Object value, BigDecimal fallback) {
+        if (value == null) return fallback;
+        if (value instanceof Number number) return BigDecimal.valueOf(number.doubleValue());
+        try {
+            return new BigDecimal(String.valueOf(value));
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    private boolean asBoolean(Object value, boolean fallback) {
+        if (value == null) return fallback;
+        if (value instanceof Boolean bool) return bool;
+        if (value instanceof Number number) return number.intValue() != 0;
+        return Boolean.parseBoolean(String.valueOf(value));
+    }
+
+    public Map<String, Object> getReferralSettings() {
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("level1InstantRate", referralRateSettings.getOrDefault(1, new BigDecimal("5")));
+        settings.put("level2InstantRate", referralRateSettings.getOrDefault(2, new BigDecimal("4")));
+        settings.put("level3InstantRate", referralRateSettings.getOrDefault(3, new BigDecimal("3")));
+        settings.put("level4InstantRate", referralRateSettings.getOrDefault(4, new BigDecimal("2")));
+        settings.put("level5InstantRate", referralRateSettings.getOrDefault(5, new BigDecimal("1")));
+        settings.put("level1MonthlyRate", BigDecimal.ONE);
+        settings.put("level2MonthlyRate", BigDecimal.ZERO);
+        settings.put("level3MonthlyRate", BigDecimal.ZERO);
+        settings.put("level4MonthlyRate", BigDecimal.ZERO);
+        settings.put("level5MonthlyRate", BigDecimal.ZERO);
+        return settings;
+    }
+
+    @Transactional
+    public Map<String, Object> updateReferralSettings(User admin, Map<String, Object> settings, HttpServletRequest request) {
+        Map<String, Object> normalized = new LinkedHashMap<>();
+        normalized.put("level1InstantRate", asBigDecimal(settings.get("level1InstantRate"), new BigDecimal("5")));
+        normalized.put("level2InstantRate", asBigDecimal(settings.get("level2InstantRate"), new BigDecimal("4")));
+        normalized.put("level3InstantRate", asBigDecimal(settings.get("level3InstantRate"), new BigDecimal("3")));
+        normalized.put("level4InstantRate", asBigDecimal(settings.get("level4InstantRate"), new BigDecimal("2")));
+        normalized.put("level5InstantRate", asBigDecimal(settings.get("level5InstantRate"), new BigDecimal("1")));
+        normalized.put("level1MonthlyRate", asBigDecimal(settings.get("level1MonthlyRate"), BigDecimal.ONE));
+        normalized.put("level2MonthlyRate", asBigDecimal(settings.get("level2MonthlyRate"), BigDecimal.ZERO));
+        normalized.put("level3MonthlyRate", asBigDecimal(settings.get("level3MonthlyRate"), BigDecimal.ZERO));
+        normalized.put("level4MonthlyRate", asBigDecimal(settings.get("level4MonthlyRate"), BigDecimal.ZERO));
+        normalized.put("level5MonthlyRate", asBigDecimal(settings.get("level5MonthlyRate"), BigDecimal.ZERO));
+
+        referralRateSettings = new LinkedHashMap<>();
+        referralRateSettings.put(1, asBigDecimal(normalized.get("level1InstantRate"), new BigDecimal("5")));
+        referralRateSettings.put(2, asBigDecimal(normalized.get("level2InstantRate"), new BigDecimal("4")));
+        referralRateSettings.put(3, asBigDecimal(normalized.get("level3InstantRate"), new BigDecimal("3")));
+        referralRateSettings.put(4, asBigDecimal(normalized.get("level4InstantRate"), new BigDecimal("2")));
+        referralRateSettings.put(5, asBigDecimal(normalized.get("level5InstantRate"), new BigDecimal("1")));
+
+        auditService.log(admin, "REFERRAL_SETTINGS_UPDATED", "ReferralSettings", "GLOBAL", null, normalized.toString(), request);
+        return normalized;
+    }
+
+    public Map<String, Object> getWithdrawalSettings() {
+        return new LinkedHashMap<>(withdrawalSettingsState);
+    }
+
+    @Transactional
+    public Map<String, Object> updateWithdrawalSettings(User admin, Map<String, Object> settings, HttpServletRequest request) {
+        Map<String, Object> normalized = new LinkedHashMap<>();
+        normalized.put("withdrawalEnabled", asBoolean(settings.get("withdrawalEnabled"), true));
+        normalized.put("minimumWithdrawalAmount", asBigDecimal(settings.get("minimumWithdrawalAmount"), new BigDecimal("1000")));
+        normalized.put("maximumWithdrawalAmount", asBigDecimal(settings.get("maximumWithdrawalAmount"), BigDecimal.ZERO));
+        normalized.put("dailyWithdrawalLimit", asBigDecimal(settings.get("dailyWithdrawalLimit"), BigDecimal.ZERO));
+        normalized.put("monthlyWithdrawalLimit", asBigDecimal(settings.get("monthlyWithdrawalLimit"), BigDecimal.ZERO));
+        normalized.put("largeWithdrawalAlertThreshold", asBigDecimal(settings.get("largeWithdrawalAlertThreshold"), new BigDecimal("50000")));
+        normalized.put("processingTime", settings.get("processingTime") != null ? String.valueOf(settings.get("processingTime")) : "24 hours");
+        normalized.put("preferredMethod", settings.get("preferredMethod") != null ? String.valueOf(settings.get("preferredMethod")) : "Bank Transfer");
+
+        withdrawalSettingsState = normalized;
+        auditService.log(admin, "WITHDRAWAL_SETTINGS_UPDATED", "WithdrawalSettings", "GLOBAL", null, normalized.toString(), request);
+        return normalized;
+    }
+
+    public Map<String, Object> getFraudRules() {
+        List<User> users = userRepository.findAll();
+
+        Map<String, Long> duplicatePan = users.stream()
+                .map(User::getPanNumber)
+                .filter(value -> value != null && !value.isBlank())
+                .collect(Collectors.groupingBy(v -> v, Collectors.counting()));
+
+        Map<String, Long> duplicateAadhaar = users.stream()
+                .map(User::getAadhaarLast4)
+                .filter(value -> value != null && !value.isBlank())
+                .collect(Collectors.groupingBy(v -> v, Collectors.counting()));
+
+        Map<String, Long> duplicateBankAccounts = users.stream()
+                .map(User::getBankAccountNumber)
+                .filter(value -> value != null && !value.isBlank())
+                .collect(Collectors.groupingBy(v -> v, Collectors.counting()));
+
+        List<Map<String, Object>> highVelocityReferrers = referralRelationshipRepository.findAll().stream()
+                .collect(Collectors.groupingBy(ReferralRelationship::getReferrerUserId, Collectors.counting()))
+                .entrySet().stream()
+                .filter(entry -> entry.getValue() >= 3)
+                .map(entry -> {
+                    User user = getUser(entry.getKey());
+                    return Map.<String, Object>of(
+                            "rule", "HIGH_VELOCITY_REFERRER",
+                            "severity", "MEDIUM",
+                            "count", entry.getValue(),
+                            "value", user.getFullName() != null ? user.getFullName() : user.getEmail(),
+                            "userId", entry.getKey()
+                    );
+                })
+                .toList();
+
+        return Map.of(
+                "duplicatePan", duplicatePan.entrySet().stream()
+                        .filter(entry -> entry.getValue() > 1)
+                        .map(entry -> Map.of("rule", "DUPLICATE_PAN", "severity", "HIGH", "count", entry.getValue(), "value", entry.getKey()))
+                        .toList(),
+                "duplicateAadhaarLast4", duplicateAadhaar.entrySet().stream()
+                        .filter(entry -> entry.getValue() > 1)
+                        .map(entry -> Map.of("rule", "DUPLICATE_AADHAAR_LAST4", "severity", "HIGH", "count", entry.getValue(), "value", entry.getKey()))
+                        .toList(),
+                "duplicateBankAccounts", duplicateBankAccounts.entrySet().stream()
+                        .filter(entry -> entry.getValue() > 1)
+                        .map(entry -> Map.of("rule", "DUPLICATE_BANK_ACCOUNT", "severity", "HIGH", "count", entry.getValue(), "value", entry.getKey()))
+                        .toList(),
+                "highVelocityReferrers", highVelocityReferrers
+        );
+    }
+
+    public Map<String, Object> getReferralReport() {
+        List<User> users = userRepository.findAll();
+        List<ReferralRelationship> relationships = referralRelationshipRepository.findAll();
+        List<ReferralCommission> commissions = referralCommissionRepository.findAll();
+
+        List<Map<String, Object>> levelSummary = IntStream.rangeClosed(1, 5)
+                .mapToObj(level -> {
+                    BigDecimal instantRate = referralRateSettings.getOrDefault(level, BigDecimal.ZERO);
+                    List<ReferralRelationship> levelMatches = relationships.stream()
+                            .filter(rel -> rel.getReferralLevel() != null && rel.getReferralLevel().equals(level))
+                            .toList();
+                    BigDecimal commissionAmount = commissions.stream()
+                            .filter(item -> item.getReferralLevel() != null && item.getReferralLevel().equals(level))
+                            .map(ReferralCommission::getCommissionAmount)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    return Map.<String, Object>of(
+                            "level", level,
+                            "instantRate", instantRate,
+                            "monthlyRate", BigDecimal.ZERO,
+                            "relationships", levelMatches.size(),
+                            "commissionAmount", commissionAmount,
+                            "instantCashbackAmount", commissionAmount,
+                            "monthlyIncomeAmount", BigDecimal.ZERO
+                    );
+                })
+                .toList();
+
+        List<Map<String, Object>> topReferrers = users.stream()
+                .filter(user -> user.getReferralCode() != null && !user.getReferralCode().isBlank())
+                .map(user -> {
+                    long referralCount = relationships.stream().filter(rel -> rel.getReferrerUserId().equals(user.getId())).count();
+                    BigDecimal commissionAmount = commissions.stream()
+                            .filter(item -> item.getBeneficiaryUserId().equals(user.getId()))
+                            .map(ReferralCommission::getCommissionAmount)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    return Map.<String, Object>of(
+                            "userId", user.getId(),
+                            "name", user.getFullName() != null ? user.getFullName() : user.getEmail(),
+                            "email", user.getEmail(),
+                            "referralCode", user.getReferralCode(),
+                            "referralCount", referralCount,
+                            "commissionAmount", commissionAmount,
+                            "accountStatus", user.getAccountStatus() != null ? user.getAccountStatus().name() : "ACTIVE"
+                    );
+                })
+                .sorted((a, b) -> Long.compare(((Number) b.get("referralCount")).longValue(), ((Number) a.get("referralCount")).longValue()))
+                .limit(5)
+                .toList();
+
+        List<Map<String, Object>> recentRelationships = relationships.stream()
+                .sorted(Comparator.comparing(ReferralRelationship::getLinkedAt, Comparator.nullsLast(LocalDateTime::compareTo)).reversed())
+                .limit(10)
+                .map(rel -> {
+                    User referrer = getUser(rel.getReferrerUserId());
+                    User referred = getUser(rel.getReferredUserId());
+                    return Map.<String, Object>of(
+                            "id", rel.getId(),
+                            "referrerName", referrer.getFullName() != null ? referrer.getFullName() : referrer.getEmail(),
+                            "referrerCode", referrer.getReferralCode(),
+                            "referredName", referred.getFullName() != null ? referred.getFullName() : referred.getEmail(),
+                            "referredEmail", referred.getEmail(),
+                            "level", rel.getReferralLevel(),
+                            "active", rel.isActive(),
+                            "linkedAt", rel.getLinkedAt()
+                    );
+                })
+                .toList();
+
+        BigDecimal totalCommissions = commissions.stream().map(ReferralCommission::getCommissionAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal instantCashbackPaid = commissions.stream().map(ReferralCommission::getCommissionAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        return Map.of(
+                "totalReferralUsers", users.stream().filter(user -> user.getReferredByCode() != null && !user.getReferredByCode().isBlank()).count(),
+                "activeLinks", relationships.stream().filter(ReferralRelationship::isActive).count(),
+                "instantCashbackPaid", instantCashbackPaid,
+                "monthlyReferralIncomePaid", BigDecimal.ZERO,
+                "totalCommissions", totalCommissions,
+                "skippedCommissions", commissions.stream().filter(item -> item.getStatus() == DomainEnums.CommissionStatus.SKIPPED).count(),
+                "levelSummary", levelSummary,
+                "topReferrers", topReferrers,
+                "recentRelationships", recentRelationships
+        );
+    }
+
+    public Map<String, Object> getReferralCommissionsForAdmin() {
+        List<Map<String, Object>> commissions = referralCommissionRepository.findAll().stream()
+                .map(commission -> {
+                    User beneficiary = getUser(commission.getBeneficiaryUserId());
+                    User sourceInvestor = getUser(commission.getSourceInvestorId());
+                    return Map.<String, Object>of(
+                            "id", commission.getId(),
+                            "beneficiaryUserId", commission.getBeneficiaryUserId(),
+                            "beneficiaryName", beneficiary.getFullName() != null ? beneficiary.getFullName() : beneficiary.getEmail(),
+                            "sourceInvestorId", commission.getSourceInvestorId(),
+                            "sourceInvestorName", sourceInvestor.getFullName() != null ? sourceInvestor.getFullName() : sourceInvestor.getEmail(),
+                            "typeLabel", "Referral commission",
+                            "commissionType", "REFERRAL",
+                            "month", commission.getCommissionMonth(),
+                            "level", commission.getReferralLevel(),
+                            "rate", commission.getCommissionRate(),
+                            "sourceAmountLabel", "Investment interest",
+                            "sourceInterestAmount", commission.getSourceInterestAmount(),
+                            "sourceAmount", commission.getSourceInterestAmount(),
+                            "commissionAmount", commission.getCommissionAmount(),
+                            "status", commission.getStatus() != null ? commission.getStatus().name() : "CALCULATED",
+                            "skipReason", commission.getSkipReason(),
+                            "creditedAt", commission.getCreditedAt()
+                    );
+                })
+                .toList();
+        return Map.of("commissions", commissions);
+    }
+
+    @Transactional
+    public Map<String, Object> releaseReferralCommission(User admin, String commissionId, HttpServletRequest request) {
+        ReferralCommission commission = referralCommissionRepository.findById(commissionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Referral commission not found"));
+        commission.setStatus(DomainEnums.CommissionStatus.CREDITED);
+        commission.setCreditedAt(LocalDateTime.now());
+        referralCommissionRepository.save(commission);
+        auditService.log(admin, "REFERRAL_COMMISSION_RELEASED", "ReferralCommission", commissionId, null, commission.getCommissionAmount().toPlainString(), request);
+        return Map.of("status", "SUCCESS", "message", "Referral commission released.", "commissionId", commissionId);
+    }
+
+    public Map<String, Object> previewReferralPayout(String investmentId) {
+        Investment investment = getInvestment(investmentId);
+        User investor = getUser(investment.getInvestorUserId());
+        BigDecimal monthlyInterest = investment.getInvestmentAmount()
+                .multiply(investment.getMonthlyInterestRate() != null ? investment.getMonthlyInterestRate() : BigDecimal.ZERO)
+                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+
+        List<Map<String, Object>> instantCashbackRows = new ArrayList<>();
+        List<Map<String, Object>> monthlyIncomeRows = new ArrayList<>();
+        BigDecimal instantTotal = BigDecimal.ZERO;
+        BigDecimal monthlyTotal = BigDecimal.ZERO;
+
+        for (ReferralRelationship relationship : referralRelationshipRepository.findByReferredUserIdOrderByReferralLevelAsc(investment.getInvestorUserId())) {
+            BigDecimal rate = referralRateSettings.getOrDefault(relationship.getReferralLevel(), BigDecimal.ZERO);
+            BigDecimal amount = monthlyInterest.multiply(rate).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+            User beneficiary = getUser(relationship.getReferrerUserId());
+            instantCashbackRows.add(Map.of(
+                    "level", relationship.getReferralLevel(),
+                    "beneficiaryUserId", beneficiary.getId(),
+                    "beneficiaryName", beneficiary.getFullName() != null ? beneficiary.getFullName() : beneficiary.getEmail(),
+                    "rate", rate,
+                    "amount", amount
+            ));
+            instantTotal = instantTotal.add(amount);
+            monthlyIncomeRows.add(Map.of(
+                    "level", relationship.getReferralLevel(),
+                    "beneficiaryUserId", beneficiary.getId(),
+                    "beneficiaryName", beneficiary.getFullName() != null ? beneficiary.getFullName() : beneficiary.getEmail(),
+                    "rate", rate,
+                    "amount", amount
+            ));
+            monthlyTotal = monthlyTotal.add(amount);
+        }
+
+        return Map.of(
+                "investorUserId", investor.getId(),
+                "investorName", investor.getFullName() != null ? investor.getFullName() : investor.getEmail(),
+                "investmentAmount", investment.getInvestmentAmount(),
+                "investorMonthlyInterest", monthlyInterest,
+                "instantCashbackTotal", instantTotal,
+                "monthlyIncomeTotal", monthlyTotal,
+                "instantCashbackRows", instantCashbackRows,
+                "monthlyIncomeRows", monthlyIncomeRows
+        );
+    }
+
+    public Map<String, Object> simulateReferralPayout(Map<String, Object> body) {
+        String investorUserId = body.get("investorUserId") != null ? String.valueOf(body.get("investorUserId")) : null;
+        BigDecimal investmentAmount = asBigDecimal(body.get("investmentAmount"), BigDecimal.ZERO);
+        User investor = investorUserId == null ? null : getUser(investorUserId);
+        BigDecimal monthlyInterest = investmentAmount.multiply(new BigDecimal("10")).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+
+        List<Map<String, Object>> instantRows = new ArrayList<>();
+        List<Map<String, Object>> monthlyRows = new ArrayList<>();
+        BigDecimal instantTotal = BigDecimal.ZERO;
+        BigDecimal monthlyTotal = BigDecimal.ZERO;
+
+        if (investor != null) {
+            for (ReferralRelationship relationship : referralRelationshipRepository.findByReferredUserIdOrderByReferralLevelAsc(investor.getId())) {
+                BigDecimal rate = referralRateSettings.getOrDefault(relationship.getReferralLevel(), BigDecimal.ZERO);
+                BigDecimal amount = monthlyInterest.multiply(rate).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+                User beneficiary = getUser(relationship.getReferrerUserId());
+                instantRows.add(Map.of(
+                        "level", relationship.getReferralLevel(),
+                        "beneficiaryName", beneficiary.getFullName() != null ? beneficiary.getFullName() : beneficiary.getEmail(),
+                        "rate", rate,
+                        "amount", amount
+                ));
+                monthlyRows.add(Map.of(
+                        "level", relationship.getReferralLevel(),
+                        "beneficiaryName", beneficiary.getFullName() != null ? beneficiary.getFullName() : beneficiary.getEmail(),
+                        "rate", rate,
+                        "amount", amount
+                ));
+                instantTotal = instantTotal.add(amount);
+                monthlyTotal = monthlyTotal.add(amount);
+            }
+        }
+
+        return Map.of(
+                "investorUserId", investorUserId,
+                "investorName", investor != null ? (investor.getFullName() != null ? investor.getFullName() : investor.getEmail()) : null,
+                "investmentAmount", investmentAmount,
+                "investorMonthlyInterest", monthlyInterest,
+                "instantCashbackTotal", instantTotal,
+                "monthlyIncomeTotal", monthlyTotal,
+                "instantCashbackRows", instantRows,
+                "monthlyIncomeRows", monthlyRows
+        );
     }
 
     public Map<String, Object> getSystemSettings() {

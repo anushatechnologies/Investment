@@ -70,10 +70,60 @@ public class AdminOpsController {
         return platformService.getFraudAlerts();
     }
 
+    @GetMapping("/api/admin/fraud/rules")
+    public Object fraudRules() {
+        return platformService.getFraudRules();
+    }
+
     @PostMapping("/api/admin/fraud-alerts/{id}/resolve")
     public Object resolveFraud(@PathVariable("id") String id, @RequestBody(required = false) ApiDtos.ResolveAlertRequest request, HttpServletRequest servletRequest) {
         return platformService.resolveFraudAlert(currentUserService.requireCurrentUser(), id,
                 request == null ? new ApiDtos.ResolveAlertRequest("Resolved", "RESOLVED") : request, servletRequest);
+    }
+
+    @GetMapping("/api/admin/referrals/report")
+    public Object referralReport() {
+        return platformService.getReferralReport();
+    }
+
+    @GetMapping("/api/admin/referrals/settings")
+    public Object referralSettings() {
+        return platformService.getReferralSettings();
+    }
+
+    @PutMapping("/api/admin/referrals/settings")
+    public Object updateReferralSettings(@RequestBody Map<String, Object> settings, HttpServletRequest servletRequest) {
+        return platformService.updateReferralSettings(currentUserService.requireCurrentUser(), settings, servletRequest);
+    }
+
+    @GetMapping("/api/admin/referrals/commissions")
+    public Object referralCommissions() {
+        return platformService.getReferralCommissionsForAdmin();
+    }
+
+    @PostMapping("/api/admin/referrals/commissions/{id}/release")
+    public Object releaseReferralCommission(@PathVariable("id") String id, HttpServletRequest servletRequest) {
+        return platformService.releaseReferralCommission(currentUserService.requireCurrentUser(), id, servletRequest);
+    }
+
+    @GetMapping("/api/admin/referrals/preview")
+    public Object previewReferral(@RequestParam("investmentId") String investmentId) {
+        return platformService.previewReferralPayout(investmentId);
+    }
+
+    @PostMapping("/api/admin/referrals/simulate")
+    public Object simulateReferral(@RequestBody Map<String, Object> payload) {
+        return platformService.simulateReferralPayout(payload);
+    }
+
+    @GetMapping("/api/admin/support/tickets")
+    public Object supportTickets() {
+        return platformService.getAllSupportTickets();
+    }
+
+    @PostMapping("/api/admin/support/tickets/{id}/respond")
+    public Object respondSupportTicket(@PathVariable("id") String id, @RequestBody(required = false) Map<String, String> payload, HttpServletRequest servletRequest) {
+        return platformService.respondToSupportTicket(currentUserService.requireCurrentUser(), id, payload == null ? Map.of() : payload, servletRequest);
     }
 
     @GetMapping("/api/admin/audit-logs")

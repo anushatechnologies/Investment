@@ -62,6 +62,7 @@ public class SecurityConfig {
                                 "/api/auth/verify-reset-mpin-otp",
                                 "/api/auth/reset-mpin",
                                 "/api/kyc/pan/verify",
+                                "/api/files/**",
                                 "/api/webhooks/whatsapp",
                                 "/api/webhooks/whatsapp/**",
                                 "/api/webhooks/razorpay",

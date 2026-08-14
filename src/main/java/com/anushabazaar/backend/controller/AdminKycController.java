@@ -51,6 +51,11 @@ public class AdminKycController {
         return platformService.getKycDocuments(id);
     }
 
+    @GetMapping("/user/{userId}/documents")
+    public Object userDocuments(@PathVariable("userId") String userId) {
+        return platformService.getUserKycDocuments(userId);
+    }
+
     @GetMapping("/bank-accounts")
     public Object bankAccounts() {
         return platformService.getAllBankAccounts();
