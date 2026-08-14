@@ -1,5 +1,6 @@
 package com.anushabazaar.backend.service;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.MailException;
@@ -15,16 +16,16 @@ public class EmailService {
     private final boolean enabled;
     private final String from;
 
-    public EmailService(JavaMailSender mailSender,
+    public EmailService(ObjectProvider<JavaMailSender> mailSenderProvider,
                         @Value("${app.email.enabled:false}") boolean enabled,
                         @Value("${app.email.from:}") String from) {
-        this.mailSender = mailSender;
+        this.mailSender = mailSenderProvider.getIfAvailable();
         this.enabled = enabled;
         this.from = from;
     }
 
     public boolean isEnabled() {
-        return enabled;
+        return enabled && mailSender != null;
     }
 
     public boolean sendSignupOtp(String email, String otp) {
@@ -40,7 +41,7 @@ public class EmailService {
     }
 
     private boolean send(String to, String subject, String body) {
-        if (!enabled) {
+        if (!enabled || mailSender == null) {
             return false;
         }
         SimpleMailMessage message = new SimpleMailMessage();
