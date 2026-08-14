@@ -123,13 +123,13 @@ public final class ApiDtos {
     public record ChangePasswordRequest(@NotBlank String currentPassword, @Size(min = 8) String newPassword) {
     }
 
-    public record ForgotMpinRequest(String mobileNumber, String phone) {
+    public record ForgotMpinRequest(String mobileNumber, String mobile, String phone) {
     }
 
-    public record VerifyResetMpinOtpRequest(String mobileNumber, String phone, String otp, String code) {
+    public record VerifyResetMpinOtpRequest(String mobileNumber, String mobile, String phone, String otp, String code) {
     }
 
-    public record ResetMpinRequest(String mobileNumber, String phone, String resetToken, String token, String newMpin, String mpin) {
+    public record ResetMpinRequest(String mobileNumber, String mobile, String phone, String resetToken, String token, String newMpin, String mpin, String otp, String code) {
     }
 
     public record ChangeMpinRequest(String currentMpin, String newMpin) {
@@ -267,27 +267,6 @@ public final class ApiDtos {
             String mobileNumber,
             String mobile,
             String mpin
-    ) {
-    }
-
-    public record ForgotMpinRequest(
-            String mobileNumber,
-            String mobile
-    ) {
-    }
-
-    public record ResetMpinRequest(
-            String mobileNumber,
-            String mobile,
-            String otp,
-            String code,
-            String newMpin
-    ) {
-    }
-
-    public record ChangeMpinRequest(
-            String currentMpin,
-            String newMpin
     ) {
     }
 }
