@@ -102,8 +102,13 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public Map<String, Object> forgotPassword(@Valid @RequestBody ApiDtos.ForgotPasswordRequest request) {
-        return authService.forgotPassword(request);
+    public Map<String, Object> forgotPassword(@Valid @RequestBody ApiDtos.ForgotPasswordRequest request, HttpServletRequest servletRequest) {
+        return authService.forgotPassword(request, servletRequest);
+    }
+
+    @PostMapping("/verify-reset-password-otp")
+    public Map<String, Object> verifyResetPasswordOtp(@RequestBody ApiDtos.VerifyResetPasswordOtpRequest request) {
+        return authService.verifyResetPasswordOtp(request);
     }
 
     @PostMapping("/reset-password")

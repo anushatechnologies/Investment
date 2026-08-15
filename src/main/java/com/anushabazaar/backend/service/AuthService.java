@@ -590,38 +590,110 @@ public class AuthService {
     }
 
     @Transactional
-    public Map<String, Object> forgotPassword(ApiDtos.ForgotPasswordRequest request) {
+    public Map<String, Object> forgotPassword(ApiDtos.ForgotPasswordRequest request, HttpServletRequest servletRequest) {
         String identifier = request.email() != null && !request.email().isBlank()
                 ? request.email()
                 : (request.mobileNumber() != null && !request.mobileNumber().isBlank()
                         ? request.mobileNumber()
-                        : (request.phone() != null && !request.phone().isBlank()
-                                ? request.phone()
-                                : request.identifier()));
+                        : (request.mobile() != null && !request.mobile().isBlank()
+                                ? request.mobile()
+                                : (request.phone() != null && !request.phone().isBlank()
+                                        ? request.phone()
+                                        : request.identifier())));
         if (identifier == null || identifier.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mobile number or email is required");
         }
         User user = findUserByIdentifier(identifier)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found for given details"));
-        TokenRecord token = issueToken(user.getId(), DomainEnums.TokenType.PASSWORD_RESET, 24);
-        return Map.of("message", "Password reset token generated", "resetToken", token.getTokenValue());
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found for mobile number"));
+
+        ApiDtos.SendOtpRequest otpReq = new ApiDtos.SendOtpRequest(null, user.getMobileNumber(), null, "PASSWORD_RESET", "SMS");
+        Map<String, Object> otpRes = sendOtp(otpReq, servletRequest);
+
+        Map<String, Object> response = new HashMap<>(otpRes);
+        response.put("status", "SUCCESS");
+        response.put("message", "OTP sent to your registered mobile number for password reset");
+        response.put("target", user.getMobileNumber());
+        response.put("mobileNumber", user.getMobileNumber());
+        return response;
+    }
+
+    @Transactional
+    public Map<String, Object> verifyResetPasswordOtp(ApiDtos.VerifyResetPasswordOtpRequest request) {
+        String mobile = request.mobileNumber() != null && !request.mobileNumber().isBlank()
+                ? request.mobileNumber()
+                : (request.mobile() != null && !request.mobile().isBlank()
+                        ? request.mobile()
+                        : request.phone());
+        String code = request.otp() != null && !request.otp().isBlank() ? request.otp() : request.code();
+
+        if (mobile == null || mobile.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mobile number is required");
+        }
+
+        User user = findUserByIdentifier(mobile)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found for mobile number"));
+
+        ApiDtos.VerifyOtpRequest verifyReq = new ApiDtos.VerifyOtpRequest(null, user.getMobileNumber(), null, code, code, "PASSWORD_RESET");
+        verifyOtp(verifyReq);
+
+        TokenRecord resetToken = issueToken(user.getId(), DomainEnums.TokenType.PASSWORD_RESET, 1);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "SUCCESS");
+        response.put("verified", true);
+        response.put("message", "OTP verified. Proceed to set new password.");
+        response.put("resetToken", resetToken.getTokenValue());
+        response.put("token", resetToken.getTokenValue());
+        response.put("mobileNumber", user.getMobileNumber());
+        return response;
     }
 
     @Transactional
     public Map<String, Object> resetPassword(ApiDtos.ResetPasswordRequest request) {
-        TokenRecord record = tokenRecordRepository.findByTokenValueAndTokenTypeAndUsedFalse(request.token(), DomainEnums.TokenType.PASSWORD_RESET)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid reset token"));
-        if (record.getExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reset token expired");
+        String tokenVal = request.token() != null && !request.token().isBlank()
+                ? request.token()
+                : request.resetToken();
+        String newPass = request.newPassword() != null && !request.newPassword().isBlank()
+                ? request.newPassword()
+                : request.password();
+        String mobile = request.mobileNumber() != null && !request.mobileNumber().isBlank()
+                ? request.mobileNumber()
+                : (request.mobile() != null && !request.mobile().isBlank()
+                        ? request.mobile()
+                        : request.phone());
+
+        if (newPass == null || newPass.trim().length() < 6) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password must be at least 6 characters");
         }
-        User user = userRepository.findById(record.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+
+        User user = null;
+        if (tokenVal != null && !tokenVal.isBlank()) {
+            TokenRecord record = tokenRecordRepository.findByTokenValueAndTokenTypeAndUsedFalse(tokenVal, DomainEnums.TokenType.PASSWORD_RESET)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or expired reset token"));
+            if (record.getExpiresAt().isBefore(LocalDateTime.now())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reset token has expired");
+            }
+            user = userRepository.findById(record.getUserId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+            record.setUsed(true);
+            tokenRecordRepository.save(record);
+        } else if (mobile != null && !mobile.isBlank()) {
+            user = findUserByIdentifier(mobile)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reset token or verified mobile number is required");
+        }
+
+        user.setPasswordHash(passwordEncoder.encode(newPass.trim()));
+        user.setFailedLoginAttempts(0);
+        user.setAccountLockedUntil(null);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
-        record.setUsed(true);
-        tokenRecordRepository.save(record);
-        return Map.of("message", "Password reset successful");
+
+        return Map.of(
+                "status", "SUCCESS",
+                "message", "Password has been reset successfully. You can now login with your new password."
+        );
     }
 
     @Transactional

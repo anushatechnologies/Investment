@@ -114,13 +114,16 @@ public final class ApiDtos {
     public record RefreshTokenRequest(@NotBlank String refreshToken) {
     }
 
-    public record ForgotPasswordRequest(String email, String mobileNumber, String phone, String identifier) {
+    public record ForgotPasswordRequest(String email, String mobileNumber, String mobile, String phone, String identifier) {
     }
 
-    public record ResetPasswordRequest(@NotBlank String token, @Size(min = 8) String newPassword) {
+    public record VerifyResetPasswordOtpRequest(String mobileNumber, String mobile, String phone, String email, String otp, String code) {
     }
 
-    public record ChangePasswordRequest(@NotBlank String currentPassword, @Size(min = 8) String newPassword) {
+    public record ResetPasswordRequest(String token, String resetToken, @Size(min = 6) String newPassword, String password, String mobileNumber, String mobile, String phone, String otp, String code) {
+    }
+
+    public record ChangePasswordRequest(@NotBlank String currentPassword, @Size(min = 6) String newPassword) {
     }
 
     public record ForgotMpinRequest(String mobileNumber, String mobile, String phone) {
