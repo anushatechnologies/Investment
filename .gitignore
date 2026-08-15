@@ -4,3 +4,7 @@
 /.vscode/
 *.iml
 *.log
+investment-*/
+investment_*/
+package-lock.json
+

@@ -116,7 +116,7 @@ public class AuthService {
         if (request.mpin() != null && !request.mpin().isBlank()) {
             user.setMpinHash(passwordEncoder.encode(request.mpin()));
         }
-        user.setDateOfBirth(LocalDate.of(1995, 1, 1));
+        user.setDateOfBirth(parseDateOfBirth(request.dateOfBirth(), request.dob()));
         user.setPanNumber(pan);
         user.setAadhaarLast4(aadhaar);
         user.setAddress(addr);
@@ -900,6 +900,53 @@ public class AuthService {
                     result.put("message", "Invalid referral code.");
                     return result;
                 });
+    }
+
+    /**
+     * Parse Date of Birth from various string and object formats:
+     * - YYYY-MM-DD (e.g. 1995-05-20)
+     * - DD-MM-YYYY (e.g. 20-05-1995)
+     * - YYYY/MM/DD (e.g. 1995/05/20)
+     * - DD/MM/YYYY (e.g. 20/05/1995)
+     * - ISO date strings
+     */
+    private LocalDate parseDateOfBirth(Object rawDob, String fallbackDob) {
+        String dobStr = null;
+        if (rawDob != null) {
+            dobStr = rawDob.toString().trim();
+        } else if (fallbackDob != null && !fallbackDob.isBlank()) {
+            dobStr = fallbackDob.trim();
+        }
+
+        if (dobStr == null || dobStr.isBlank()) {
+            return LocalDate.of(1995, 1, 1);
+        }
+
+        dobStr = dobStr.replace("\"", "").trim();
+
+        try {
+            if (dobStr.matches("^\\d{4}-\\d{2}-\\d{2}$")) {
+                return LocalDate.parse(dobStr);
+            }
+            if (dobStr.matches("^\\d{2}-\\d{2}-\\d{4}$")) {
+                String[] parts = dobStr.split("-");
+                return LocalDate.of(Integer.parseInt(parts[2]), Integer.parseInt(parts[1]), Integer.parseInt(parts[0]));
+            }
+            if (dobStr.matches("^\\d{4}/\\d{2}/\\d{2}$")) {
+                String[] parts = dobStr.split("/");
+                return LocalDate.of(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
+            }
+            if (dobStr.matches("^\\d{2}/\\d{2}/\\d{4}$")) {
+                String[] parts = dobStr.split("/");
+                return LocalDate.of(Integer.parseInt(parts[2]), Integer.parseInt(parts[1]), Integer.parseInt(parts[0]));
+            }
+            if (dobStr.contains("T")) {
+                return LocalDate.parse(dobStr.substring(0, dobStr.indexOf("T")));
+            }
+            return LocalDate.parse(dobStr);
+        } catch (Exception e) {
+            return LocalDate.of(1995, 1, 1);
+        }
     }
 }
 
