@@ -40,6 +40,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final AuditService auditService;
     private final EmailService emailService;
+    private final WhatsappService whatsappService;
     private final int refreshExpiryDays;
     private final java.util.concurrent.ConcurrentHashMap<String, String> activeOtpMap = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -51,6 +52,7 @@ public class AuthService {
                        JwtService jwtService,
                        AuditService auditService,
                        EmailService emailService,
+                       WhatsappService whatsappService,
                        @Value("${app.jwt.refresh-expiry-days}") int refreshExpiryDays) {
         this.userRepository = userRepository;
         this.walletRepository = walletRepository;
@@ -60,6 +62,7 @@ public class AuthService {
         this.jwtService = jwtService;
         this.auditService = auditService;
         this.emailService = emailService;
+        this.whatsappService = whatsappService;
         this.refreshExpiryDays = refreshExpiryDays;
     }
 
@@ -270,25 +273,52 @@ public class AuthService {
         }
 
         String normalizedRecipient = recipient.toLowerCase().trim();
+        String digitsOnly = normalizedRecipient.replaceAll("\\D", "");
         String otp = String.format("%06d", new java.util.Random().nextInt(1000000));
+
+        // Store OTP under multiple lookup keys (raw, normalized, 10-digit, E.164)
         activeOtpMap.put(normalizedRecipient, otp);
+        if (digitsOnly.length() >= 10) {
+            String last10 = digitsOnly.substring(digitsOnly.length() - 10);
+            activeOtpMap.put(last10, otp);
+            activeOtpMap.put("+91" + last10, otp);
+            activeOtpMap.put("91" + last10, otp);
+        }
+
+        java.util.Optional<User> existingUser = findUserByIdentifier(recipient);
+        boolean userExists = existingUser.isPresent();
+
+        String purpose = request.type() != null && !request.type().isBlank()
+                ? request.type()
+                : (request.purpose() != null && !request.purpose().isBlank() ? request.purpose() : "Verification");
 
         boolean emailSent = false;
         if (normalizedRecipient.contains("@")) {
             if (emailService.isEnabled()) {
                 emailSent = emailService.sendSignupOtp(normalizedRecipient, otp);
             }
+        } else if (existingUser.isPresent() && existingUser.get().getEmail() != null && !existingUser.get().getEmail().isBlank()) {
+            if (emailService.isEnabled()) {
+                emailSent = emailService.sendSignupOtp(existingUser.get().getEmail(), otp);
+            }
         }
 
-        java.util.Optional<User> existingUser = findUserByIdentifier(recipient);
-        boolean userExists = existingUser.isPresent();
+        boolean whatsappSent = false;
+        String mobileToSend = digitsOnly.length() >= 10 ? digitsOnly.substring(digitsOnly.length() - 10) : normalizedRecipient;
+        if (!normalizedRecipient.contains("@") || (existingUser.isPresent() && existingUser.get().getMobileNumber() != null)) {
+            if (existingUser.isPresent() && existingUser.get().getMobileNumber() != null) {
+                mobileToSend = existingUser.get().getMobileNumber();
+            }
+            whatsappSent = whatsappService.sendOtpWhatsapp(mobileToSend, otp, purpose);
+        }
 
         Map<String, Object> response = new HashMap<>();
         response.put("status", "SUCCESS");
-        response.put("message", emailSent ? "OTP sent successfully to " + normalizedRecipient : "OTP generated successfully.");
+        response.put("message", "OTP sent successfully to " + (normalizedRecipient.contains("@") ? normalizedRecipient : "+91 " + mobileToSend));
         response.put("otp", otp);
         response.put("recipient", normalizedRecipient);
         response.put("emailSent", emailSent);
+        response.put("whatsappSent", whatsappSent);
         response.put("userExists", userExists);
         response.put("accountExists", userExists);
         response.put("nextStep", userExists ? "LOGIN_OTP" : "REGISTER_OTP");
@@ -307,10 +337,16 @@ public class AuthService {
         if ("123456".equals(code) || "000000".equals(code)) {
             valid = true;
         } else if (recipient != null && !recipient.isBlank()) {
-            String storedOtp = activeOtpMap.get(recipient.toLowerCase().trim());
-            if (code.equals(storedOtp)) {
+            String norm = recipient.toLowerCase().trim();
+            String digits = norm.replaceAll("\\D", "");
+            String last10 = digits.length() >= 10 ? digits.substring(digits.length() - 10) : digits;
+
+            if (code.equals(activeOtpMap.get(norm)) || code.equals(activeOtpMap.get(digits)) || code.equals(activeOtpMap.get(last10)) || code.equals(activeOtpMap.get("+91" + last10))) {
                 valid = true;
-                activeOtpMap.remove(recipient.toLowerCase().trim());
+                activeOtpMap.remove(norm);
+                activeOtpMap.remove(digits);
+                activeOtpMap.remove(last10);
+                activeOtpMap.remove("+91" + last10);
             }
         }
 

@@ -162,4 +162,67 @@ public class WhatsappService {
 
         return payload;
     }
+
+    /**
+     * Sends an OTP code via WhatsApp text message to the given mobile number.
+     * Used for login OTP, password reset OTP, and MPIN reset OTP.
+     *
+     * @param mobileNumber  10-digit or E.164 mobile number
+     * @param otp           6-digit OTP code
+     * @param purpose       e.g. "Login", "Password Reset", "MPIN Reset"
+     * @return true if successfully sent (or simulated), false on failure
+     */
+    public boolean sendOtpWhatsapp(String mobileNumber, String otp, String purpose) {
+        if (!enabled) {
+            log.info("WhatsApp OTP disabled. OTP for {} ({}): {}", mobileNumber, purpose, otp);
+            return false;
+        }
+
+        String recipientPhone = formatPhoneNumber(mobileNumber);
+        if (recipientPhone.isBlank()) {
+            log.warn("Cannot send OTP WhatsApp — invalid phone: {}", mobileNumber);
+            return false;
+        }
+
+        try {
+            if ("mock_access_token".equals(accessToken) || "mock_phone_number_id".equals(phoneNumberId)) {
+                log.info("[SIMULATED] WhatsApp OTP {} for {} ({}): {}", purpose, recipientPhone, purpose, otp);
+                return true;
+            }
+
+            String url = "https://graph.facebook.com/v18.0/" + phoneNumberId + "/messages";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(accessToken);
+
+            // Send as a plain text message (not template) for OTP
+            Map<String, Object> textPayload = new LinkedHashMap<>();
+            textPayload.put("messaging_product", "whatsapp");
+            textPayload.put("recipient_type", "individual");
+            textPayload.put("to", recipientPhone);
+            textPayload.put("type", "text");
+            textPayload.put("text", Map.of(
+                "preview_url", false,
+                "body", String.format(
+                    "🔐 *Anusha Trade OTP*\n\nYour %s verification code is:\n\n*%s*\n\nThis code is valid for 10 minutes. Do not share it with anyone.\n\n_— Anusha Trade Security Team_",
+                    purpose, otp
+                )
+            ));
+
+            HttpEntity<String> requestEntity = new HttpEntity<>(objectMapper.writeValueAsString(textPayload), headers);
+            ResponseEntity<String> response = restTemplate.postForEntity(url, requestEntity, String.class);
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                log.info("WhatsApp OTP sent successfully to {}", recipientPhone);
+                return true;
+            } else {
+                log.warn("WhatsApp OTP send failed for {} — HTTP {}", recipientPhone, response.getStatusCode().value());
+                return false;
+            }
+        } catch (Exception ex) {
+            log.error("Error sending WhatsApp OTP to {}: {}", recipientPhone, ex.getMessage());
+            return false;
+        }
+    }
 }
