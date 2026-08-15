@@ -280,12 +280,18 @@ public class AuthService {
             }
         }
 
+        java.util.Optional<User> existingUser = findUserByIdentifier(recipient);
+        boolean userExists = existingUser.isPresent();
+
         Map<String, Object> response = new HashMap<>();
         response.put("status", "SUCCESS");
         response.put("message", emailSent ? "OTP sent successfully to " + normalizedRecipient : "OTP generated successfully.");
         response.put("otp", otp);
         response.put("recipient", normalizedRecipient);
         response.put("emailSent", emailSent);
+        response.put("userExists", userExists);
+        response.put("accountExists", userExists);
+        response.put("nextStep", userExists ? "LOGIN_OTP" : "REGISTER_OTP");
         return response;
     }
 
@@ -312,11 +318,38 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or expired OTP");
         }
 
-        return Map.of(
-                "status", "SUCCESS",
-                "message", "OTP verified successfully",
-                "verified", true
-        );
+        java.util.Optional<User> existingUser = recipient != null ? findUserByIdentifier(recipient) : java.util.Optional.empty();
+        boolean userExists = existingUser.isPresent();
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "SUCCESS");
+        response.put("message", "OTP verified successfully");
+        response.put("verified", true);
+        response.put("userExists", userExists);
+        response.put("accountExists", userExists);
+        response.put("mobileNumber", recipient != null ? recipient : "");
+        response.put("signupVerificationToken", "verified_token_" + System.currentTimeMillis());
+
+        if (userExists) {
+            User user = existingUser.get();
+            response.put("nextStep", "DASHBOARD");
+            response.put("userId", user.getId());
+            response.put("user", Map.of(
+                "id", user.getId(),
+                "name", user.getFullName() != null ? user.getFullName() : "Investor",
+                "fullName", user.getFullName() != null ? user.getFullName() : "Investor",
+                "mobileNumber", user.getMobileNumber() != null ? user.getMobileNumber() : recipient,
+                "email", user.getEmail() != null ? user.getEmail() : ""
+            ));
+            TokenRecord accessToken = issueToken(user.getId(), DomainEnums.TokenType.ACCESS, 24 * 7);
+            TokenRecord refreshToken = issueToken(user.getId(), DomainEnums.TokenType.REFRESH, 24 * 30);
+            response.put("accessToken", accessToken.getTokenValue());
+            response.put("refreshToken", refreshToken.getTokenValue());
+            response.put("token", accessToken.getTokenValue());
+        } else {
+            response.put("nextStep", "COMPLETE_PROFILE");
+        }
+        return response;
     }
 
     private String extractOtpRecipient(ApiDtos.SendOtpRequest request) {
