@@ -290,7 +290,7 @@ public class AuthService {
 
         String purpose = request.type() != null && !request.type().isBlank()
                 ? request.type()
-                : (request.purpose() != null && !request.purpose().isBlank() ? request.purpose() : "Verification");
+                : "Verification";
 
         boolean emailSent = false;
         if (normalizedRecipient.contains("@")) {
