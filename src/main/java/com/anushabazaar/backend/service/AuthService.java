@@ -341,11 +341,15 @@ public class AuthService {
                 "mobileNumber", user.getMobileNumber() != null ? user.getMobileNumber() : recipient,
                 "email", user.getEmail() != null ? user.getEmail() : ""
             ));
-            TokenRecord accessToken = issueToken(user.getId(), DomainEnums.TokenType.ACCESS, 24 * 7);
+            String accessToken = jwtService.generateAccessToken(
+                user.getEmail() != null ? user.getEmail() : user.getMobileNumber(),
+                user.getId(),
+                user.getRole() != null ? user.getRole().name() : "USER"
+            );
             TokenRecord refreshToken = issueToken(user.getId(), DomainEnums.TokenType.REFRESH, 24 * 30);
-            response.put("accessToken", accessToken.getTokenValue());
+            response.put("accessToken", accessToken);
             response.put("refreshToken", refreshToken.getTokenValue());
-            response.put("token", accessToken.getTokenValue());
+            response.put("token", accessToken);
         } else {
             response.put("nextStep", "COMPLETE_PROFILE");
         }
