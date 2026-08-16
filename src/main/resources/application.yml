@@ -78,4 +78,11 @@ app:
   sms:
     fast2sms-api-key: ${FAST2SMS_API_KEY:}
     enabled: ${SMS_ENABLED:true}
+  razorpay:
+    enabled: ${RAZORPAY_ENABLED:true}
+    key-id: ${RAZORPAY_KEY_ID:rzp_live_TO6q7NUVnPM6bA}
+    key-secret: ${RAZORPAY_KEY_SECRET:dummy_razorpay_secret}
+    webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:dummy_webhook_secret}
+    currency: INR
+    auto-capture: true
 
