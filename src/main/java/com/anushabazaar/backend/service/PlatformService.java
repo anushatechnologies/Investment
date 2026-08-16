@@ -1451,7 +1451,22 @@ public class PlatformService {
         }
 
         RazorpayPayment payment = razorpayPaymentRepository.findByInvestmentId(investmentId)
-                .orElseGet(RazorpayPayment::new);
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Razorpay order not found for investment"));
+        if (!request.razorpayOrderId().equals(payment.getRazorpayOrderId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay order does not match this investment");
+        }
+
+        Map<String, Object> gatewayPayment = razorpayGatewayService.fetchPayment(request.razorpayPaymentId());
+        String gatewayStatus = String.valueOf(gatewayPayment.getOrDefault("status", ""));
+        if (!("captured".equalsIgnoreCase(gatewayStatus) || "paid".equalsIgnoreCase(gatewayStatus))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay payment is not captured");
+        }
+        BigDecimal gatewayAmount = new BigDecimal(String.valueOf(gatewayPayment.getOrDefault("amount", "0")));
+        if (gatewayAmount.compareTo(investment.getInvestmentAmount().movePointRight(2)) != 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay payment amount does not match the investment");
+        }
+
+        boolean alreadyCaptured = Boolean.TRUE.equals(payment.getCaptured());
         payment.setId(payment.getId() == null ? UUID.randomUUID().toString() : payment.getId());
         payment.setInvestmentId(investment.getId());
         payment.setInvestorId(user.getId());
@@ -1497,6 +1512,27 @@ public class PlatformService {
 
         receiptService.triggerReceiptDelivery(receipt, user);
 
+        if (!alreadyCaptured) {
+            Wallet wallet = getWalletByUserId(user.getId());
+            String transactionReference = "RAZORPAY:" + request.razorpayPaymentId();
+            if (walletTransactionRepository.findFirstByReferenceId(transactionReference).isEmpty()) {
+                WalletTransaction transaction = new WalletTransaction();
+                transaction.setId(UUID.randomUUID().toString());
+                transaction.setWalletId(wallet.getId());
+                transaction.setUserId(user.getId());
+                transaction.setTransactionType(DomainEnums.WalletTransactionType.INVESTMENT_CREDIT);
+                transaction.setAmount(investment.getInvestmentAmount());
+                transaction.setDirection(DomainEnums.Direction.CREDIT);
+                transaction.setBalanceBefore(wallet.getAvailableBalance());
+                transaction.setBalanceAfter(wallet.getAvailableBalance());
+                transaction.setReferenceId(transactionReference);
+                transaction.setDescription("Investment payment via Razorpay");
+                transaction.setCreatedAt(LocalDateTime.now());
+                transaction.setCreatedBy("RAZORPAY");
+                walletTransactionRepository.save(transaction);
+            }
+        }
+
         auditService.log(user, "VERIFY_RAZORPAY_PAYMENT", "SUCCESS", "Verified Razorpay payment " + request.razorpayPaymentId() + " for investment " + investment.getId(), servletRequest);
 
         Map<String, Object> investmentMap = Map.of(
@@ -1533,7 +1569,69 @@ public class PlatformService {
     }
 
     public Map<String, Object> handleRazorpayWebhook(String signature, String eventId, String payload) {
-        return Map.of("status", "SUCCESS", "eventHandled", true);
+        if (signature == null || signature.isBlank() || payload == null || payload.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay webhook signature and payload are required");
+        }
+        if (!razorpayGatewayService.verifyWebhookSignature(payload, signature)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid Razorpay webhook signature");
+        }
+        if (eventId != null && razorpayPaymentRepository.findByWebhookEventId(eventId).isPresent()) {
+            return Map.of("status", "SUCCESS", "eventHandled", false, "duplicate", true);
+        }
+
+        Map<String, Object> root = razorpayGatewayService.parseJson(payload);
+        String event = String.valueOf(root.getOrDefault("event", ""));
+        Map<String, Object> payloadMap = razorpayGatewayService.nestedMap(root, "payload");
+        Map<String, Object> paymentPayload = razorpayGatewayService.nestedMap(payloadMap, "payment");
+        Map<String, Object> entity = razorpayGatewayService.nestedMap(paymentPayload, "entity");
+        String orderId = String.valueOf(entity.getOrDefault("order_id", ""));
+        String paymentId = String.valueOf(entity.getOrDefault("id", ""));
+        if (orderId.isBlank()) {
+            return Map.of("status", "SUCCESS", "eventHandled", false, "reason", "No order in event");
+        }
+
+        RazorpayPayment payment = razorpayPaymentRepository.findByRazorpayOrderId(orderId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Razorpay order not found"));
+        payment.setWebhookEventId(eventId);
+        payment.setWebhookEventType(event);
+        payment.setWebhookPayload(payload);
+        if (!paymentId.isBlank()) payment.setRazorpayPaymentId(paymentId);
+
+        boolean successful = "payment.captured".equalsIgnoreCase(event) || "order.paid".equalsIgnoreCase(event);
+        if (successful) {
+            payment.setStatus("CAPTURED");
+            payment.setCaptured(true);
+            payment.setPaymentCapturedAt(LocalDateTime.now());
+            Investment investment = getInvestment(payment.getInvestmentId());
+            investment.setStatus(DomainEnums.InvestmentStatus.ACTIVE);
+            investment.setActivatedAt(LocalDateTime.now());
+            investment.setReceiptApproved(true);
+            investmentRepository.save(investment);
+            if (paymentId.isBlank()) paymentId = payment.getRazorpayPaymentId();
+            String reference = "RAZORPAY:" + paymentId;
+            Wallet wallet = getWalletByUserId(payment.getInvestorId());
+            if (walletTransactionRepository.findFirstByReferenceId(reference).isEmpty()) {
+                WalletTransaction transaction = new WalletTransaction();
+                transaction.setId(UUID.randomUUID().toString());
+                transaction.setWalletId(wallet.getId());
+                transaction.setUserId(payment.getInvestorId());
+                transaction.setTransactionType(DomainEnums.WalletTransactionType.INVESTMENT_CREDIT);
+                transaction.setAmount(payment.getAmount());
+                transaction.setDirection(DomainEnums.Direction.CREDIT);
+                transaction.setBalanceBefore(wallet.getAvailableBalance());
+                transaction.setBalanceAfter(wallet.getAvailableBalance());
+                transaction.setReferenceId(reference);
+                transaction.setDescription("Investment payment via Razorpay");
+                transaction.setCreatedAt(LocalDateTime.now());
+                transaction.setCreatedBy("RAZORPAY_WEBHOOK");
+                walletTransactionRepository.save(transaction);
+            }
+        } else if ("payment.failed".equalsIgnoreCase(event)) {
+            payment.setStatus("FAILED");
+            payment.setCaptured(false);
+        }
+        razorpayPaymentRepository.save(payment);
+        return Map.of("status", "SUCCESS", "eventHandled", true, "event", event);
     }
 
     public List<RazorpayPayment> getAllRazorpayPayments() {

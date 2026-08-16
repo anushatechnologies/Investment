@@ -48,21 +48,6 @@ public class RazorpayGatewayService {
 
     public Map<String, Object> createOrder(BigDecimal amount, String currency, String receipt, Map<String, Object> notes) {
         ensureConfigured();
-        if (properties.getKeySecret() != null && properties.getKeySecret().contains("dummy")) {
-            String mockOrderId = "order_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
-            Map<String, Object> mockOrder = new LinkedHashMap<>();
-            mockOrder.put("id", mockOrderId);
-            mockOrder.put("entity", "order");
-            mockOrder.put("amount", toSubunits(amount));
-            mockOrder.put("amount_paid", 0);
-            mockOrder.put("amount_due", toSubunits(amount));
-            mockOrder.put("currency", currency != null ? currency : "INR");
-            mockOrder.put("receipt", receipt);
-            mockOrder.put("status", "created");
-            mockOrder.put("notes", notes);
-            return mockOrder;
-        }
-
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("amount", toSubunits(amount));
         payload.put("currency", currency);
@@ -73,17 +58,11 @@ public class RazorpayGatewayService {
 
     public Map<String, Object> fetchPayment(String paymentId) {
         ensureConfigured();
-        if (properties.getKeySecret() != null && properties.getKeySecret().contains("dummy")) {
-            return Map.of("id", paymentId, "status", "captured", "amount", 100000);
-        }
         return send("GET", "/payments/" + urlEncode(paymentId), null);
     }
 
     public Map<String, Object> capturePayment(String paymentId, BigDecimal amount, String currency) {
         ensureConfigured();
-        if (properties.getKeySecret() != null && properties.getKeySecret().contains("dummy")) {
-            return Map.of("id", paymentId, "status", "captured", "amount", toSubunits(amount));
-        }
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("amount", toSubunits(amount));
         payload.put("currency", currency);
@@ -92,9 +71,6 @@ public class RazorpayGatewayService {
 
     public Map<String, Object> createRefund(String paymentId, BigDecimal amount, String notes) {
         ensureConfigured();
-        if (properties.getKeySecret() != null && properties.getKeySecret().contains("dummy")) {
-            return Map.of("id", "rfnd_" + UUID.randomUUID().toString().replace("-", "").substring(0, 14), "status", "processed");
-        }
         Map<String, Object> payload = new LinkedHashMap<>();
         if (amount != null && amount.compareTo(BigDecimal.ZERO) > 0) {
             payload.put("amount", toSubunits(amount));
@@ -109,9 +85,6 @@ public class RazorpayGatewayService {
 
     public Map<String, Object> fetchSettlements(Integer count, Integer skip) {
         ensureConfigured();
-        if (properties.getKeySecret() != null && properties.getKeySecret().contains("dummy")) {
-            return Map.of("count", 0, "items", List.of());
-        }
         StringBuilder path = new StringBuilder("/settlements");
         if (count != null || skip != null) {
             path.append("?");
@@ -130,12 +103,6 @@ public class RazorpayGatewayService {
 
     public boolean verifyCheckoutSignature(String orderId, String paymentId, String signature) {
         ensureConfigured();
-        if (properties.getKeySecret() != null && properties.getKeySecret().contains("dummy")) {
-            return true;
-        }
-        if (signature != null && signature.startsWith("mock_")) {
-            return true;
-        }
         String payload = orderId + "|" + paymentId;
         return secureEquals(hmacHex(payload, properties.getKeySecret()), signature);
     }
@@ -145,9 +112,6 @@ public class RazorpayGatewayService {
         if (properties.getWebhookSecret() == null || properties.getWebhookSecret().isBlank()) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Razorpay webhook secret is not configured");
         }
-        if (properties.getWebhookSecret().contains("dummy")) {
-            return true;
-        }
         return secureEquals(hmacHex(rawPayload, properties.getWebhookSecret()), signature);
     }
 
@@ -156,6 +120,14 @@ public class RazorpayGatewayService {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not serialize Razorpay payload");
+        }
+    }
+
+    public Map<String, Object> parseJson(String payload) {
+        try {
+            return objectMapper.readValue(payload, MAP_TYPE);
+        } catch (JsonProcessingException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid Razorpay webhook payload");
         }
     }
 
@@ -193,7 +165,8 @@ public class RazorpayGatewayService {
 
     private void ensureConfigured() {
         if (!properties.isEnabled() || properties.getKeyId() == null || properties.getKeyId().isBlank()
-                || properties.getKeySecret() == null || properties.getKeySecret().isBlank()) {
+                || properties.getKeySecret() == null || properties.getKeySecret().isBlank()
+                || properties.getKeySecret().toLowerCase().contains("dummy")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Razorpay is not configured on this backend");
         }
     }
