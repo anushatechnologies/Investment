@@ -41,6 +41,7 @@ public class AuthService {
     private final AuditService auditService;
     private final EmailService emailService;
     private final WhatsappService whatsappService;
+    private final SmsService smsService;
     private final int refreshExpiryDays;
     private final java.util.concurrent.ConcurrentHashMap<String, String> activeOtpMap = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -53,6 +54,7 @@ public class AuthService {
                        AuditService auditService,
                        EmailService emailService,
                        WhatsappService whatsappService,
+                       SmsService smsService,
                        @Value("${app.jwt.refresh-expiry-days}") int refreshExpiryDays) {
         this.userRepository = userRepository;
         this.walletRepository = walletRepository;
@@ -63,6 +65,7 @@ public class AuthService {
         this.auditService = auditService;
         this.emailService = emailService;
         this.whatsappService = whatsappService;
+        this.smsService = smsService;
         this.refreshExpiryDays = refreshExpiryDays;
     }
 
@@ -304,11 +307,13 @@ public class AuthService {
         }
 
         boolean whatsappSent = false;
+        boolean smsSent = false;
         String mobileToSend = digitsOnly.length() >= 10 ? digitsOnly.substring(digitsOnly.length() - 10) : normalizedRecipient;
         if (!normalizedRecipient.contains("@") || (existingUser.isPresent() && existingUser.get().getMobileNumber() != null)) {
             if (existingUser.isPresent() && existingUser.get().getMobileNumber() != null) {
                 mobileToSend = existingUser.get().getMobileNumber();
             }
+            smsSent = smsService.sendOtpSms(mobileToSend, otp, purpose);
             whatsappSent = whatsappService.sendOtpWhatsapp(mobileToSend, otp, purpose);
         }
 
@@ -317,6 +322,7 @@ public class AuthService {
         response.put("message", "OTP sent successfully to " + (normalizedRecipient.contains("@") ? normalizedRecipient : "+91 " + mobileToSend));
         response.put("otp", otp);
         response.put("recipient", normalizedRecipient);
+        response.put("smsSent", smsSent);
         response.put("emailSent", emailSent);
         response.put("whatsappSent", whatsappSent);
         response.put("userExists", userExists);
