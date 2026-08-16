@@ -598,7 +598,22 @@ public class PlatformService {
     }
 
     public List<WalletTransaction> getWalletTransactions(User user) {
-        return walletTransactionRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+        List<WalletTransaction> transactions = walletTransactionRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+        transactions.forEach(transaction -> {
+            String reference = transaction.getReferenceId();
+            if (reference == null || !reference.startsWith("RAZORPAY:")) return;
+            String paymentId = reference.substring("RAZORPAY:".length());
+            razorpayPaymentRepository.findByRazorpayPaymentId(paymentId).ifPresent(payment ->
+                    paymentReceiptRepository.findTopByInvestmentIdOrderByUploadedAtDesc(payment.getInvestmentId()).ifPresent(receipt -> {
+                        Map<String, Object> receiptMap = new LinkedHashMap<>();
+                        receiptMap.put("receiptNumber", receipt.getReceiptNumber());
+                        receiptMap.put("receiptUrl", receipt.getReceiptUrl());
+                        receiptMap.put("emailStatus", receipt.getEmailStatus() == null ? "NOT_SENT" : receipt.getEmailStatus().name());
+                        receiptMap.put("available", true);
+                        transaction.setReceipt(receiptMap);
+                    }));
+        });
+        return transactions;
     }
 
     @Transactional
@@ -1501,11 +1516,12 @@ public class PlatformService {
 
         receipt.setVerificationStatus(DomainEnums.ReceiptStatus.APPROVED);
         receipt.setPaymentAmount(investment.getInvestmentAmount());
+        receipt.setBankReference(request.razorpayPaymentId());
         if (receipt.getReceiptNumber() == null || receipt.getReceiptNumber().isBlank()) {
             receipt.setReceiptNumber("ATR-2026-" + UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase());
         }
         if (receipt.getReceiptUrl() == null || receipt.getReceiptUrl().isBlank()) {
-            receipt.setReceiptUrl("https://storage.anusha.trade/receipts/" + receipt.getReceiptNumber() + ".pdf");
+            receipt.setReceiptUrl("/api/receipts/" + investment.getId() + "/invoice");
         }
 
         paymentReceiptRepository.save(receipt);
@@ -1549,7 +1565,8 @@ public class PlatformService {
         Map<String, Object> receiptMap = Map.of(
                 "receiptNumber", receipt.getReceiptNumber(),
                 "receiptUrl", receipt.getReceiptUrl(),
-                "emailStatus", receipt.getEmailStatus() != null ? receipt.getEmailStatus().name() : "QUEUED"
+                "emailStatus", receipt.getEmailStatus() != null ? receipt.getEmailStatus().name() : "QUEUED",
+                "available", true
         );
 
         return Map.of(
@@ -1607,6 +1624,27 @@ public class PlatformService {
             investment.setActivatedAt(LocalDateTime.now());
             investment.setReceiptApproved(true);
             investmentRepository.save(investment);
+            PaymentReceipt receipt = paymentReceiptRepository.findTopByInvestmentIdOrderByUploadedAtDesc(investment.getId())
+                    .orElseGet(() -> {
+                        PaymentReceipt created = new PaymentReceipt();
+                        created.setId(UUID.randomUUID().toString());
+                        created.setInvestmentId(investment.getId());
+                        created.setInvestorId(payment.getInvestorId());
+                        created.setUploadedAt(LocalDateTime.now());
+                        created.setPaymentDate(LocalDate.now());
+                        return created;
+                    });
+            receipt.setPaymentAmount(investment.getInvestmentAmount());
+            receipt.setBankReference(paymentId);
+            receipt.setVerificationStatus(DomainEnums.ReceiptStatus.APPROVED);
+            if (receipt.getReceiptNumber() == null || receipt.getReceiptNumber().isBlank()) {
+                receipt.setReceiptNumber("ATR-2026-" + UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase());
+            }
+            if (receipt.getReceiptUrl() == null || receipt.getReceiptUrl().isBlank()) {
+                receipt.setReceiptUrl("/api/receipts/" + investment.getId() + "/invoice");
+            }
+            paymentReceiptRepository.save(receipt);
+            receiptService.triggerReceiptDelivery(receipt, userRepository.findById(payment.getInvestorId()).orElse(null));
             if (paymentId.isBlank()) paymentId = payment.getRazorpayPaymentId();
             String reference = "RAZORPAY:" + paymentId;
             Wallet wallet = getWalletByUserId(payment.getInvestorId());
@@ -1629,13 +1667,40 @@ public class PlatformService {
         } else if ("payment.failed".equalsIgnoreCase(event)) {
             payment.setStatus("FAILED");
             payment.setCaptured(false);
+            String failedReference = "RAZORPAY_FAILED:" + paymentId;
+            Wallet wallet = getWalletByUserId(payment.getInvestorId());
+            if (walletTransactionRepository.findFirstByReferenceId(failedReference).isEmpty()) {
+                WalletTransaction transaction = new WalletTransaction();
+                transaction.setId(UUID.randomUUID().toString());
+                transaction.setWalletId(wallet.getId());
+                transaction.setUserId(payment.getInvestorId());
+                transaction.setTransactionType(DomainEnums.WalletTransactionType.INVESTMENT_DEBIT);
+                transaction.setAmount(payment.getAmount());
+                transaction.setDirection(DomainEnums.Direction.DEBIT);
+                transaction.setBalanceBefore(wallet.getAvailableBalance());
+                transaction.setBalanceAfter(wallet.getAvailableBalance());
+                transaction.setReferenceId(failedReference);
+                transaction.setDescription("Razorpay payment failed");
+                transaction.setCreatedAt(LocalDateTime.now());
+                transaction.setCreatedBy("RAZORPAY_WEBHOOK");
+                walletTransactionRepository.save(transaction);
+            }
         }
         razorpayPaymentRepository.save(payment);
         return Map.of("status", "SUCCESS", "eventHandled", true, "event", event);
     }
 
     public List<RazorpayPayment> getAllRazorpayPayments() {
-        return razorpayPaymentRepository.findAllByOrderByCheckoutOrderCreatedAtDesc();
+        List<RazorpayPayment> payments = razorpayPaymentRepository.findAllByOrderByCheckoutOrderCreatedAtDesc();
+        payments.forEach(payment -> {
+            userRepository.findById(payment.getInvestorId()).ifPresent(user -> payment.setInvestorEmail(user.getEmail()));
+            paymentReceiptRepository.findTopByInvestmentIdOrderByUploadedAtDesc(payment.getInvestmentId()).ifPresent(receipt -> {
+                payment.setReceiptNumber(receipt.getReceiptNumber());
+                payment.setEmailStatus(receipt.getEmailStatus() == null ? "NOT_SENT" : receipt.getEmailStatus().name());
+                payment.setInvoiceUrl(receipt.getReceiptUrl());
+            });
+        });
+        return payments;
     }
 
     public Map<String, Object> getRazorpaySettlements(Integer count, Integer skip) {

@@ -3,6 +3,7 @@ package com.anushabazaar.backend.domain;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Lob;
+import jakarta.persistence.Transient;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -40,6 +41,14 @@ public class RazorpayPayment {
     private String paymentPayload;
     @Lob
     private String webhookPayload;
+    @Transient
+    private String investorEmail;
+    @Transient
+    private String receiptNumber;
+    @Transient
+    private String emailStatus;
+    @Transient
+    private String invoiceUrl;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -93,4 +102,12 @@ public class RazorpayPayment {
     public void setPaymentPayload(String paymentPayload) { this.paymentPayload = paymentPayload; }
     public String getWebhookPayload() { return webhookPayload; }
     public void setWebhookPayload(String webhookPayload) { this.webhookPayload = webhookPayload; }
+    public String getInvestorEmail() { return investorEmail; }
+    public void setInvestorEmail(String investorEmail) { this.investorEmail = investorEmail; }
+    public String getReceiptNumber() { return receiptNumber; }
+    public void setReceiptNumber(String receiptNumber) { this.receiptNumber = receiptNumber; }
+    public String getEmailStatus() { return emailStatus; }
+    public void setEmailStatus(String emailStatus) { this.emailStatus = emailStatus; }
+    public String getInvoiceUrl() { return invoiceUrl; }
+    public void setInvoiceUrl(String invoiceUrl) { this.invoiceUrl = invoiceUrl; }
 }

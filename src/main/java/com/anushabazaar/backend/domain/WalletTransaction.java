@@ -4,9 +4,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.Transient;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Entity
 public class WalletTransaction {
@@ -26,6 +28,8 @@ public class WalletTransaction {
     private String description;
     private LocalDateTime createdAt;
     private String createdBy;
+    @Transient
+    private Map<String, Object> receipt;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -51,4 +55,6 @@ public class WalletTransaction {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public String getCreatedBy() { return createdBy; }
     public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
+    public Map<String, Object> getReceipt() { return receipt; }
+    public void setReceipt(Map<String, Object> receipt) { this.receipt = receipt; }
 }

@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 
 @RestController
 @RequestMapping("/api/receipts")
@@ -25,5 +27,11 @@ public class ReceiptController {
     @PreAuthorize("isAuthenticated()")
     public ApiDtos.ReceiptStatusResponse getReceiptStatus(@PathVariable("investmentId") String investmentId) {
         return receiptService.getReceiptStatus(currentUserService.requireCurrentUser(), investmentId);
+    }
+
+    @GetMapping(value = "/{investmentId}/invoice", produces = MediaType.TEXT_HTML_VALUE)
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<String> invoice(@PathVariable("investmentId") String investmentId) {
+        return ResponseEntity.ok(receiptService.renderInvoice(currentUserService.requireCurrentUser(), investmentId));
     }
 }

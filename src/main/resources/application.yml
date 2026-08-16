@@ -69,6 +69,11 @@ app:
     s3-bucket: ${APP_FILE_STORAGE_S3_BUCKET:${AWS_S3_BUCKET:}}
     s3-secret-key: ${APP_FILE_STORAGE_S3_SECRET_KEY:${AWS_SECRET_ACCESS_KEY:}}
     fallback-to-local: ${APP_FILE_STORAGE_FALLBACK_TO_LOCAL:true}
+  email:
+    enabled: ${APP_EMAIL_ENABLED:false}
+    from: ${APP_EMAIL_FROM:}
+    invoice-base-url: ${APP_EMAIL_INVOICE_BASE_URL:http://localhost:8080}
+    logo-url: ${APP_EMAIL_LOGO_URL:https://anusha.trade/assets/brand-logo.png}
   whatsapp:
     phone-number-id: ${META_PHONE_NUMBER_ID:mock_phone_number_id}
     access-token: ${META_ACCESS_TOKEN:mock_access_token}
