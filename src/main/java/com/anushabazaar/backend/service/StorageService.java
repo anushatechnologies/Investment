@@ -2,6 +2,7 @@ package com.anushabazaar.backend.service;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -15,6 +16,17 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectResponse;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+
 @Service
 public class StorageService {
 
@@ -25,6 +37,7 @@ public class StorageService {
     private final String s3Bucket;
     private final String s3SecretKey;
     private final boolean fallbackToLocal;
+    private final S3Client s3Client;
 
     public StorageService(
             @Value("${app.file-storage.root}") String root,
@@ -43,6 +56,9 @@ public class StorageService {
         this.s3SecretKey = s3SecretKey;
         this.fallbackToLocal = fallbackToLocal;
         Files.createDirectories(this.storageRoot);
+        this.s3Client = "s3".equalsIgnoreCase(storageMode) && s3Bucket != null && !s3Bucket.isBlank()
+                ? createS3Client()
+                : null;
     }
 
     public String save(MultipartFile file, String category) throws IOException {
@@ -69,19 +85,42 @@ public class StorageService {
     }
 
     private String saveToS3(MultipartFile file, String category) throws IOException {
-        // AWS S3 upload logic — only invoked when s3Bucket is configured
-        // Uses the AWS SDK present at runtime via spring-cloud-aws or direct dependency
-        try {
-            Class<?> s3ClientBuilderClass = Class.forName("software.amazon.awssdk.services.s3.S3Client");
-            // Reflective S3 upload — falls back to local if SDK not on classpath
-            throw new UnsupportedOperationException("Direct SDK not on classpath; configure spring-cloud-aws");
-        } catch (ClassNotFoundException e) {
+        if (s3Client == null) {
             if (fallbackToLocal) {
                 return saveLocally(file, category);
             }
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "S3 SDK not available. Add AWS SDK or use local storage mode.");
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "S3 client is not configured");
         }
+
+        String key = category + "/" + UUID.randomUUID() + "-" + sanitizeFilename(file.getOriginalFilename());
+        PutObjectRequest request = PutObjectRequest.builder()
+                .bucket(s3Bucket)
+                .key(key)
+                .contentType(file.getContentType() == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : file.getContentType())
+                .contentLength(file.getSize())
+                .build();
+        try {
+            s3Client.putObject(request, RequestBody.fromInputStream(file.getInputStream(), file.getSize()));
+            return key;
+        } catch (RuntimeException ex) {
+            if (fallbackToLocal) {
+                return saveLocally(file, category);
+            }
+            throw new IOException("S3 upload failed for " + key, ex);
+        }
+    }
+
+    private S3Client createS3Client() {
+        AwsCredentialsProvider credentialsProvider = s3AccessKey != null && !s3AccessKey.isBlank()
+                && s3SecretKey != null && !s3SecretKey.isBlank()
+                ? StaticCredentialsProvider.create(AwsBasicCredentials.create(s3AccessKey, s3SecretKey))
+                : DefaultCredentialsProvider.create();
+        return S3Client.builder().region(software.amazon.awssdk.regions.Region.of(s3Region)).credentialsProvider(credentialsProvider).build();
+    }
+
+    private String sanitizeFilename(String filename) {
+        String safe = filename == null || filename.isBlank() ? "upload.bin" : filename;
+        return safe.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 
     public record StoredFile(Resource resource, String contentType, long contentLength) {}
@@ -96,6 +135,14 @@ public class StorageService {
                 if (resource.exists() || resource.isReadable()) {
                     return new StoredFile(resource, "image/jpeg", -1);
                 }
+            }
+
+            if ("s3".equalsIgnoreCase(storageMode) && s3Client != null && !Path.of(pathStr).isAbsolute()) {
+                ResponseInputStream<GetObjectResponse> object = s3Client.getObject(GetObjectRequest.builder().bucket(s3Bucket).key(pathStr).build());
+                GetObjectResponse metadata = object.response();
+                Resource resource = new InputStreamResource(object);
+                String contentType = metadata.contentType() == null ? MediaType.APPLICATION_OCTET_STREAM_VALUE : metadata.contentType();
+                return new StoredFile(resource, contentType, metadata.contentLength() == null ? -1 : metadata.contentLength());
             }
 
             Path file = Path.of(pathStr);
