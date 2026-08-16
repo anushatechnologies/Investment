@@ -101,7 +101,8 @@ public final class ApiDtos {
             String phone,
             String otp,
             String code,
-            String type
+            String type,
+            String idToken
     ) {
     }
 
@@ -117,7 +118,7 @@ public final class ApiDtos {
     public record ForgotPasswordRequest(String email, String mobileNumber, String mobile, String phone, String identifier) {
     }
 
-    public record VerifyResetPasswordOtpRequest(String mobileNumber, String mobile, String phone, String email, String otp, String code) {
+    public record VerifyResetPasswordOtpRequest(String mobileNumber, String mobile, String phone, String email, String otp, String code, String idToken) {
     }
 
     public record ResetPasswordRequest(String token, String resetToken, @Size(min = 6) String newPassword, String password, String mobileNumber, String mobile, String phone, String otp, String code) {
@@ -129,7 +130,7 @@ public final class ApiDtos {
     public record ForgotMpinRequest(String mobileNumber, String mobile, String phone) {
     }
 
-    public record VerifyResetMpinOtpRequest(String mobileNumber, String mobile, String phone, String otp, String code) {
+    public record VerifyResetMpinOtpRequest(String mobileNumber, String mobile, String phone, String otp, String code, String idToken) {
     }
 
     public record ResetMpinRequest(String mobileNumber, String mobile, String phone, String resetToken, String token, String newMpin, String mpin, String otp, String code) {

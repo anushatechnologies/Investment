@@ -42,6 +42,7 @@ public class AuthService {
     private final EmailService emailService;
     private final WhatsappService whatsappService;
     private final SmsService smsService;
+    private final FirebasePhoneAuthService firebasePhoneAuthService;
     private final int refreshExpiryDays;
     private final java.util.concurrent.ConcurrentHashMap<String, String> activeOtpMap = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -55,6 +56,7 @@ public class AuthService {
                        EmailService emailService,
                        WhatsappService whatsappService,
                        SmsService smsService,
+                       FirebasePhoneAuthService firebasePhoneAuthService,
                        @Value("${app.jwt.refresh-expiry-days}") int refreshExpiryDays) {
         this.userRepository = userRepository;
         this.walletRepository = walletRepository;
@@ -66,6 +68,7 @@ public class AuthService {
         this.emailService = emailService;
         this.whatsappService = whatsappService;
         this.smsService = smsService;
+        this.firebasePhoneAuthService = firebasePhoneAuthService;
         this.refreshExpiryDays = refreshExpiryDays;
     }
 
@@ -340,6 +343,11 @@ public class AuthService {
         }
 
         boolean valid = false;
+        if (request.idToken() != null && !request.idToken().isBlank()) {
+            FirebasePhoneAuthService.VerifiedFirebasePhone verified = firebasePhoneAuthService.verifyPhoneToken(request.idToken());
+            recipient = verified.mobileNumber();
+            valid = true;
+        }
         if ("123456".equals(code) || "000000".equals(code)) {
             valid = true;
         } else if (recipient != null && !recipient.isBlank()) {
@@ -712,8 +720,14 @@ public class AuthService {
         User user = findUserByIdentifier(mobile)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found for mobile number"));
 
-        ApiDtos.VerifyOtpRequest verifyReq = new ApiDtos.VerifyOtpRequest(null, user.getMobileNumber(), null, code, code, "PASSWORD_RESET");
-        verifyOtp(verifyReq);
+        if (request.idToken() == null || request.idToken().isBlank()) {
+            ApiDtos.VerifyOtpRequest verifyReq = new ApiDtos.VerifyOtpRequest(null, user.getMobileNumber(), null, code, code, "PASSWORD_RESET", null);
+            verifyOtp(verifyReq);
+        } else {
+            FirebasePhoneAuthService.VerifiedFirebasePhone verified = firebasePhoneAuthService.verifyPhoneToken(request.idToken());
+            user = findUserByIdentifier(verified.mobileNumber())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found for verified mobile number"));
+        }
 
         TokenRecord resetToken = issueToken(user.getId(), DomainEnums.TokenType.PASSWORD_RESET, 1);
 
@@ -816,8 +830,14 @@ public class AuthService {
         User user = findUserByIdentifier(mobile)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found for mobile number"));
 
-        ApiDtos.VerifyOtpRequest verifyReq = new ApiDtos.VerifyOtpRequest(null, user.getMobileNumber(), null, code, code, "MPIN_RESET");
-        verifyOtp(verifyReq);
+        if (request.idToken() == null || request.idToken().isBlank()) {
+            ApiDtos.VerifyOtpRequest verifyReq = new ApiDtos.VerifyOtpRequest(null, user.getMobileNumber(), null, code, code, "MPIN_RESET", null);
+            verifyOtp(verifyReq);
+        } else {
+            FirebasePhoneAuthService.VerifiedFirebasePhone verified = firebasePhoneAuthService.verifyPhoneToken(request.idToken());
+            user = findUserByIdentifier(verified.mobileNumber())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found for verified mobile number"));
+        }
 
         TokenRecord resetToken = issueToken(user.getId(), DomainEnums.TokenType.PASSWORD_RESET, 1);
 
