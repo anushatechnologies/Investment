@@ -36,38 +36,67 @@ public class DataInitializer {
                 userRepository.save(admin);
                 walletRepository.save(newWallet(admin.getId()));
             }
-            if (planRepository.count() == 0) {
-                InvestmentPlan plan1 = new InvestmentPlan();
-                plan1.setId(UUID.randomUUID().toString());
-                plan1.setPlanName("Anusha Standard Growth Plan");
-                plan1.setDescription("Standard 6-Month Lock-in Investment Plan with 10% Monthly Payout credited to Wallet.");
-                plan1.setMinimumAmount(new BigDecimal("10000"));
-                plan1.setMaximumAmount(new BigDecimal("1000000"));
-                plan1.setLockInMonths(6);
-                plan1.setMonthlyInterestRate(new BigDecimal("10.0"));
-                plan1.setActive(true);
-                plan1.setCreatedByAdminId("SYSTEM");
-                plan1.setCreatedAt(LocalDateTime.now());
-                plan1.setLastModifiedAt(LocalDateTime.now());
-                plan1.setLastModifiedBy("SYSTEM");
-                planRepository.save(plan1);
 
-                InvestmentPlan plan2 = new InvestmentPlan();
-                plan2.setId(UUID.randomUUID().toString());
-                plan2.setPlanName("Anusha Prime Investor Plan");
-                plan2.setDescription("High-Yield 12-Month Lock-in Investment Plan with 12% Monthly Payout for high net-worth investors.");
-                plan2.setMinimumAmount(new BigDecimal("100000"));
-                plan2.setMaximumAmount(new BigDecimal("5000000"));
-                plan2.setLockInMonths(12);
-                plan2.setMonthlyInterestRate(new BigDecimal("12.0"));
-                plan2.setActive(true);
-                plan2.setCreatedByAdminId("SYSTEM");
-                plan2.setCreatedAt(LocalDateTime.now());
-                plan2.setLastModifiedAt(LocalDateTime.now());
-                plan2.setLastModifiedBy("SYSTEM");
-                planRepository.save(plan2);
-            }
+            // 1. Anusha Milk Trade Investment Plan (Min ₹5,000 to Max ₹10,00,000, 10% monthly interest)
+            ensurePlan(planRepository,
+                    "PLAN-MILK-TRADE-5K-10L",
+                    "Anusha Milk Trade Investment Plan",
+                    "Official Anusha Milk Trade high-yield investment plan with 10% monthly payout credited directly to your wallet.",
+                    new BigDecimal("5000"),
+                    new BigDecimal("1000000"),
+                    6,
+                    new BigDecimal("10.0")
+            );
+
+            // 2. ₹1 Razorpay Test Payment Plan (Min ₹1 to Max ₹100, 10% monthly interest)
+            ensurePlan(planRepository,
+                    "PLAN-RAZORPAY-TEST-1INR",
+                    "₹1 Razorpay Test Payment Plan",
+                    "Instant ₹1 test investment plan to verify real-time Razorpay payments, UPI, and instant digital receipts.",
+                    new BigDecimal("1"),
+                    new BigDecimal("100"),
+                    1,
+                    new BigDecimal("10.0")
+            );
+
+            // 3. Anusha Prime Investor Plan (Min ₹1,00,000 to Max ₹50,00,000, 12% monthly interest)
+            ensurePlan(planRepository,
+                    "PLAN-PRIME-INVESTOR-1L-50L",
+                    "Anusha Prime Investor Plan",
+                    "High-Yield 12-Month Lock-in Investment Plan with 12% Monthly Payout for high net-worth investors.",
+                    new BigDecimal("100000"),
+                    new BigDecimal("5000000"),
+                    12,
+                    new BigDecimal("12.0")
+            );
         };
+    }
+
+    private void ensurePlan(InvestmentPlanRepository planRepository,
+                            String id,
+                            String name,
+                            String description,
+                            BigDecimal minAmount,
+                            BigDecimal maxAmount,
+                            int lockInMonths,
+                            BigDecimal monthlyRate) {
+        InvestmentPlan plan = planRepository.findById(id).orElseGet(() -> {
+            InvestmentPlan p = new InvestmentPlan();
+            p.setId(id);
+            p.setCreatedAt(LocalDateTime.now());
+            p.setCreatedByAdminId("SYSTEM");
+            return p;
+        });
+        plan.setPlanName(name);
+        plan.setDescription(description);
+        plan.setMinimumAmount(minAmount);
+        plan.setMaximumAmount(maxAmount);
+        plan.setLockInMonths(lockInMonths);
+        plan.setMonthlyInterestRate(monthlyRate);
+        plan.setActive(true);
+        plan.setLastModifiedAt(LocalDateTime.now());
+        plan.setLastModifiedBy("SYSTEM");
+        planRepository.save(plan);
     }
 
     private User baseAdmin(String name, String email, DomainEnums.Role role, PasswordEncoder passwordEncoder) {
