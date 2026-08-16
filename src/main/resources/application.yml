@@ -72,8 +72,6 @@ app:
   whatsapp:
     phone-number-id: ${META_PHONE_NUMBER_ID:mock_phone_number_id}
     access-token: ${META_ACCESS_TOKEN:mock_access_token}
-    webhook-verify-token: ${META_WEBHOOK_VERIFY_TOKEN:anusha_whatsapp_verify_token}
-    template-name: ${META_TEMPLATE_NAME:investment_payment_receipt}
     enabled: ${META_WHATSAPP_ENABLED:true}
   sms:
     fast2sms-api-key: ${FAST2SMS_API_KEY:}

@@ -18,7 +18,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import java.util.stream.Collectors;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -28,6 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class AuthService {
@@ -74,17 +74,17 @@ public class AuthService {
 
     @Transactional
     public Map<String, Object> register(ApiDtos.RegisterRequest request, HttpServletRequest servletRequest) {
-        String mobile = request.mobileNumber() != null && !request.mobileNumber().isBlank() ? request.mobileNumber() : request.phone();
-        String email = request.email() != null && !request.email().isBlank() ? request.email().toLowerCase() : (mobile != null ? mobile + "@anusha.trade" : "user_" + UUID.randomUUID().toString().substring(0, 8) + "@anusha.trade");
-        String name = request.fullName() != null && !request.fullName().isBlank() ? request.fullName() : (request.name() != null && !request.name().isBlank() ? request.name() : "Investor");
+        String mobile = request.mobileNumber() != null && !request.mobileNumber().isBlank() ? request.mobileNumber().trim() : (request.phone() != null && !request.phone().isBlank() ? request.phone().trim() : null);
+        String email = request.email() != null && !request.email().isBlank() ? request.email().toLowerCase().trim() : (mobile != null ? mobile + "@anusha.trade" : "user_" + UUID.randomUUID().toString().substring(0, 8) + "@anusha.trade");
+        String name = request.fullName() != null && !request.fullName().isBlank() ? request.fullName().trim() : (request.name() != null && !request.name().isBlank() ? request.name().trim() : "Investor");
         String pass = request.password() != null && !request.password().isBlank() ? request.password() : (request.mpin() != null && !request.mpin().isBlank() ? request.mpin() : "Admin@123");
-        String pan = request.panNumber() != null && !request.panNumber().isBlank() ? request.panNumber() : (request.pan() != null && !request.pan().isBlank() ? request.pan() : "ABCDE1234F");
-        String aadhaar = request.aadhaarLast4() != null && !request.aadhaarLast4().isBlank() ? request.aadhaarLast4() : (request.aadhaar() != null && !request.aadhaar().isBlank() ? request.aadhaar() : "1234");
-        String addr = request.address() != null && !request.address().isBlank() ? request.address() : "India";
-        String bankAcc = request.bankAccountNumber() != null && !request.bankAccountNumber().isBlank() ? request.bankAccountNumber() : (request.accountNumber() != null && !request.accountNumber().isBlank() ? request.accountNumber() : "0000000000");
-        String ifsc = request.bankIfscCode() != null && !request.bankIfscCode().isBlank() ? request.bankIfscCode() : (request.ifsc() != null && !request.ifsc().isBlank() ? request.ifsc() : "SBIN0000000");
-        String bank = request.bankName() != null && !request.bankName().isBlank() ? request.bankName() : "Bank";
-        String ref = request.referredByCode() != null && !request.referredByCode().isBlank() ? request.referredByCode() : request.referralCode();
+        String pan = request.panNumber() != null && !request.panNumber().isBlank() ? request.panNumber().trim().toUpperCase() : (request.pan() != null && !request.pan().isBlank() ? request.pan().trim().toUpperCase() : null);
+        String aadhaar = request.aadhaarLast4() != null && !request.aadhaarLast4().isBlank() ? request.aadhaarLast4().trim() : (request.aadhaar() != null && !request.aadhaar().isBlank() ? request.aadhaar().trim() : null);
+        String addr = request.address() != null && !request.address().isBlank() ? request.address().trim() : null;
+        String bankAcc = request.bankAccountNumber() != null && !request.bankAccountNumber().isBlank() ? request.bankAccountNumber().trim() : (request.accountNumber() != null && !request.accountNumber().isBlank() ? request.accountNumber().trim() : null);
+        String ifsc = request.bankIfscCode() != null && !request.bankIfscCode().isBlank() ? request.bankIfscCode().trim().toUpperCase() : (request.ifsc() != null && !request.ifsc().isBlank() ? request.ifsc().trim().toUpperCase() : null);
+        String bank = request.bankName() != null && !request.bankName().isBlank() ? request.bankName().trim() : null;
+        String ref = request.referredByCode() != null && !request.referredByCode().isBlank() ? request.referredByCode().trim() : request.referralCode();
 
         if (userRepository.findByEmail(email).isPresent()) {
             User existing = userRepository.findByEmail(email).get();
@@ -944,7 +944,6 @@ public class AuthService {
         return response;
     }
 
-
     private TokenRecord issueToken(String userId, DomainEnums.TokenType type, int expiryHours) {
         TokenRecord token = new TokenRecord();
         token.setId(UUID.randomUUID().toString());
@@ -1000,10 +999,6 @@ public class AuthService {
         );
     }
 
-    /**
-     * POST /api/auth/activate
-     * Marks an investor's account as ACTIVE if KYC and bank are verified.
-     */
     @Transactional
     public Map<String, Object> activateAccount(User user) {
         boolean kycApproved = DomainEnums.KycStatus.APPROVED.equals(user.getKycStatus());
@@ -1013,7 +1008,6 @@ public class AuthService {
             Map<String, Object> result = new HashMap<>();
             result.put("message", "Account cannot be activated yet. Complete KYC and bank verification first.");
             result.put("onboardingStatus", user.getAccountStatus() != null ? user.getAccountStatus().name() : "PENDING");
-
             result.put("kycStatus", user.getKycStatus() != null ? user.getKycStatus().name() : "NOT_SUBMITTED");
             result.put("bankVerified", bankVerified);
             result.put("mpinCreated", user.getMpinHash() != null);
@@ -1036,10 +1030,6 @@ public class AuthService {
         return result;
     }
 
-    /**
-     * POST /api/auth/enable-biometric
-     * Saves device biometric preference for user. Stored as a user flag.
-     */
     @Transactional
     public Map<String, Object> setBiometricPreference(User user, Map<String, Object> body) {
         boolean enabled = Boolean.TRUE.equals(body.get("enabled"));
@@ -1052,10 +1042,6 @@ public class AuthService {
         return result;
     }
 
-    /**
-     * GET /api/auth/referrals/validate?code=XXX
-     * Validates a referral code and returns the referrer's name if found.
-     */
     public Map<String, Object> validateReferralCode(String code) {
         if (code == null || code.isBlank()) {
             throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Referral code is required");
@@ -1077,14 +1063,6 @@ public class AuthService {
                 });
     }
 
-    /**
-     * Parse Date of Birth from various string and object formats:
-     * - YYYY-MM-DD (e.g. 1995-05-20)
-     * - DD-MM-YYYY (e.g. 20-05-1995)
-     * - YYYY/MM/DD (e.g. 1995/05/20)
-     * - DD/MM/YYYY (e.g. 20/05/1995)
-     * - ISO date strings
-     */
     private LocalDate parseDateOfBirth(Object rawDob, String fallbackDob) {
         String dobStr = null;
         if (rawDob != null) {
@@ -1093,8 +1071,8 @@ public class AuthService {
             dobStr = fallbackDob.trim();
         }
 
-        if (dobStr == null || dobStr.isBlank()) {
-            return LocalDate.of(1995, 1, 1);
+        if (dobStr == null || dobStr.isBlank() || "null".equalsIgnoreCase(dobStr)) {
+            return null;
         }
 
         dobStr = dobStr.replace("\"", "").trim();
@@ -1120,8 +1098,7 @@ public class AuthService {
             }
             return LocalDate.parse(dobStr);
         } catch (Exception e) {
-            return LocalDate.of(1995, 1, 1);
+            return null;
         }
     }
 }
-

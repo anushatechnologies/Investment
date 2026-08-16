@@ -245,7 +245,6 @@ public final class ApiDtos {
             String receiptNumber,
             String receiptUrl,
             String emailStatus,
-            String whatsappStatus,
             boolean available
     ) {
     }

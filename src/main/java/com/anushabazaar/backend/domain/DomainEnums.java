@@ -157,16 +157,6 @@ public final class DomainEnums {
         REFRESH
     }
 
-    public enum WhatsappStatus {
-        NOT_SENT,
-        QUEUED,
-        SENDING,
-        SENT,
-        DELIVERED,
-        READ,
-        FAILED
-    }
-
     public enum EmailStatus {
         NOT_SENT,
         QUEUED,

@@ -66,8 +66,6 @@ public class SecurityConfig {
                                 "/api/kyc/pan-verify",
                                 "/api/legal/**",
                                 "/api/files/**",
-                                "/api/webhooks/whatsapp",
-                                "/api/webhooks/whatsapp/**",
                                 "/api/webhooks/razorpay",
                                 "/api/webhooks/razorpay/**",
                                 "/api/payments/razorpay/webhook",

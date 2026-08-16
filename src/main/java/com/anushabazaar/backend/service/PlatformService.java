@@ -1513,8 +1513,7 @@ public class PlatformService {
         Map<String, Object> receiptMap = Map.of(
                 "receiptNumber", receipt.getReceiptNumber(),
                 "receiptUrl", receipt.getReceiptUrl(),
-                "emailStatus", receipt.getEmailStatus() != null ? receipt.getEmailStatus().name() : "QUEUED",
-                "whatsappStatus", receipt.getWhatsappStatus() != null ? receipt.getWhatsappStatus().name() : "QUEUED"
+                "emailStatus", receipt.getEmailStatus() != null ? receipt.getEmailStatus().name() : "QUEUED"
         );
 
         return Map.of(

@@ -39,11 +39,6 @@ public class PaymentReceipt {
     private String receiptUrl;
     @Enumerated(EnumType.STRING)
     private DomainEnums.EmailStatus emailStatus;
-    @Enumerated(EnumType.STRING)
-    private DomainEnums.WhatsappStatus whatsappStatus;
-    private String whatsappPhoneNumber;
-    private String whatsappWamid;
-    private String whatsappErrorReason;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -86,12 +81,4 @@ public class PaymentReceipt {
     public void setReceiptUrl(String receiptUrl) { this.receiptUrl = receiptUrl; }
     public DomainEnums.EmailStatus getEmailStatus() { return emailStatus; }
     public void setEmailStatus(DomainEnums.EmailStatus emailStatus) { this.emailStatus = emailStatus; }
-    public DomainEnums.WhatsappStatus getWhatsappStatus() { return whatsappStatus; }
-    public void setWhatsappStatus(DomainEnums.WhatsappStatus whatsappStatus) { this.whatsappStatus = whatsappStatus; }
-    public String getWhatsappPhoneNumber() { return whatsappPhoneNumber; }
-    public void setWhatsappPhoneNumber(String whatsappPhoneNumber) { this.whatsappPhoneNumber = whatsappPhoneNumber; }
-    public String getWhatsappWamid() { return whatsappWamid; }
-    public void setWhatsappWamid(String whatsappWamid) { this.whatsappWamid = whatsappWamid; }
-    public String getWhatsappErrorReason() { return whatsappErrorReason; }
-    public void setWhatsappErrorReason(String whatsappErrorReason) { this.whatsappErrorReason = whatsappErrorReason; }
 }

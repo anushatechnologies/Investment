@@ -10,7 +10,6 @@ import java.util.Optional;
 public interface PaymentReceiptRepository extends JpaRepository<PaymentReceipt, String> {
     Optional<PaymentReceipt> findTopByInvestmentIdOrderByUploadedAtDesc(String investmentId);
     Optional<PaymentReceipt> findByInvestmentId(String investmentId);
-    Optional<PaymentReceipt> findByWhatsappWamid(String whatsappWamid);
     Optional<PaymentReceipt> findByReceiptNumber(String receiptNumber);
     List<PaymentReceipt> findByVerificationStatus(DomainEnums.ReceiptStatus verificationStatus);
 }
