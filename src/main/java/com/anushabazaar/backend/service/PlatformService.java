@@ -134,6 +134,15 @@ public class PlatformService {
 
     public Map<String, Object> getOwnKycStatus(User user) {
         KycSubmission kyc = kycSubmissionRepository.findTopByUserIdOrderBySubmittedAtDesc(user.getId()).orElse(null);
+        if (kyc == null && user.getKycStatus() != null && user.getKycStatus() != DomainEnums.KycStatus.NOT_SUBMITTED) {
+            kyc = new KycSubmission();
+            kyc.setId("KYC-" + user.getId());
+            kyc.setUserId(user.getId());
+            kyc.setStatus(user.getKycStatus());
+            kyc.setSubmittedAt(user.getCreatedAt() != null ? user.getCreatedAt() : LocalDateTime.now());
+            kyc.setReviewedAt(user.getUpdatedAt() != null ? user.getUpdatedAt() : LocalDateTime.now());
+        }
+
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("kycStatus", user.getKycStatus() != null ? user.getKycStatus().name() : "NOT_SUBMITTED");
         response.put("accountStatus", user.getAccountStatus() != null ? user.getAccountStatus().name() : "PENDING");
@@ -142,12 +151,23 @@ public class PlatformService {
         response.put("mpinCreated", user.getMpinHash() != null && !user.getMpinHash().isBlank());
         boolean canUpload = user.getKycStatus() == null || user.getKycStatus() == DomainEnums.KycStatus.NOT_SUBMITTED || user.getKycStatus() == DomainEnums.KycStatus.REJECTED;
         response.put("canUpload", canUpload);
-        response.put("profile", Map.of(
-                "panNumber", user.getPanNumber() != null ? user.getPanNumber() : "",
-                "aadhaarLast4", user.getAadhaarLast4() != null ? user.getAadhaarLast4() : "",
-                "dateOfBirth", user.getDateOfBirth() != null ? user.getDateOfBirth().toString() : "",
-                "address", user.getAddress() != null ? user.getAddress() : ""
-        ));
+
+        Map<String, Object> profile = new LinkedHashMap<>();
+        profile.put("fullName", user.getFullName() != null ? user.getFullName() : "");
+        profile.put("email", user.getEmail() != null ? user.getEmail() : "");
+        profile.put("mobileNumber", user.getMobileNumber() != null ? user.getMobileNumber() : "");
+        profile.put("panNumber", user.getPanNumber() != null ? user.getPanNumber() : "");
+        profile.put("aadhaarLast4", user.getAadhaarLast4() != null ? user.getAadhaarLast4() : "");
+        profile.put("dateOfBirth", user.getDateOfBirth() != null ? user.getDateOfBirth().toString() : "");
+        profile.put("address", user.getAddress() != null ? user.getAddress() : "");
+        profile.put("bankName", user.getBankName() != null ? user.getBankName() : "State Bank of India");
+        profile.put("bankAccountNumber", user.getBankAccountNumber() != null ? user.getBankAccountNumber() : "");
+        profile.put("bankIfscCode", user.getBankIfscCode() != null ? user.getBankIfscCode() : "");
+        profile.put("bankVerified", user.isBankVerified());
+        profile.put("accountHolderName", user.getFullName() != null ? user.getFullName() : "");
+        profile.put("memberSince", user.getCreatedAt() != null ? user.getCreatedAt().toString() : "");
+
+        response.put("profile", profile);
         response.put("submission", kyc);
         return response;
     }
