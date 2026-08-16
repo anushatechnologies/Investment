@@ -5,7 +5,6 @@ import com.anushabazaar.backend.dto.ApiDtos;
 import com.anushabazaar.backend.repository.*;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -909,7 +908,6 @@ public class PlatformService {
         List<User> investors = userRepository.findByRole(DomainEnums.Role.INVESTOR);
         List<Investment> allInvestments = investmentRepository.findAll();
         List<Investment> activeInvestments = investmentRepository.findByStatus(DomainEnums.InvestmentStatus.ACTIVE);
-        List<WithdrawalRequest> allWithdrawals = withdrawalRepository.findAll();
         List<PaymentReceipt> allReceipts = paymentReceiptRepository.findAll();
 
         BigDecimal totalAum = activeInvestments.stream()
@@ -1791,7 +1789,7 @@ public class PlatformService {
         return Map.of(
                 "valid", true,
                 "couponCode", code,
-                "cashbackAmount", BigDecimal.ZERO,
+                "cashbackAmount", amount.multiply(new BigDecimal("0.02")).setScale(2, RoundingMode.HALF_UP),
                 "discountAmount", BigDecimal.ZERO,
                 "message", "Coupon applied successfully"
         );
