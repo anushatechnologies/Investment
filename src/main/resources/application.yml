@@ -59,8 +59,8 @@ logging:
 app:
   jwt:
     secret: 0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF
-    access-expiry-hours: 24
-    refresh-expiry-days: 7
+    access-expiry-hours: 720 # 30 days
+    refresh-expiry-days: 30 # 30 days
   file-storage:
     root: ${APP_FILE_STORAGE_ROOT:uploads}
     mode: ${APP_FILE_STORAGE_MODE:local}

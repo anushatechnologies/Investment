@@ -259,14 +259,19 @@ public class AuthService {
         );
     }
 
+    @Transactional
     public Map<String, Object> verifyMpin(User user, ApiDtos.SetMpinRequest request) {
         if (request.mpin() == null || request.mpin().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN is required");
         }
+        String mpin = request.mpin().trim();
         if (user.getMpinHash() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN has not been set for this account");
+            user.setMpinHash(passwordEncoder.encode(mpin));
+            user.setUpdatedAt(LocalDateTime.now());
+            userRepository.save(user);
+            return Map.of("status", "SUCCESS", "verified", true, "message", "MPIN initialized and verified successfully");
         }
-        if (!passwordEncoder.matches(request.mpin().trim(), user.getMpinHash())) {
+        if (!passwordEncoder.matches(mpin, user.getMpinHash())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid MPIN");
         }
         return Map.of("status", "SUCCESS", "verified", true, "message", "MPIN verified successfully");
@@ -337,7 +342,6 @@ public class AuthService {
     public Map<String, Object> verifyOtp(ApiDtos.VerifyOtpRequest request) {
         String recipient = extractOtpRecipient(request);
         String code = request.otp() != null && !request.otp().isBlank() ? request.otp() : request.code();
-
         if (code == null || code.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP code is required");
         }
