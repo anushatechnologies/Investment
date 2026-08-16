@@ -1,12 +1,10 @@
-FROM eclipse-temurin:21-jre
+FROM public.ecr.aws/amazoncorretto/amazoncorretto:21-alpine
 
 WORKDIR /app
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache curl tzdata
 
-RUN addgroup --system app && adduser --system --ingroup app app
+RUN addgroup -S app && adduser -S app -G app
 
 COPY target/backend-0.0.1-SNAPSHOT.jar app.jar
 
