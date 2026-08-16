@@ -3,7 +3,6 @@ package com.anushabazaar.backend.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
@@ -12,13 +11,6 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.UUID;
-
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
@@ -29,6 +21,12 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.UUID;
 
 @Service
 public class StorageService {
@@ -45,7 +43,7 @@ public class StorageService {
     private final S3Client s3Client;
 
     public StorageService(
-            @Value("${app.file-storage.root:uploads}") String root,
+            @Value("${app.file-storage.local-root:uploads}") String root,
             @Value("${app.file-storage.mode:local}") String storageMode,
             @Value("${app.file-storage.s3-access-key:}") String s3AccessKey,
             @Value("${app.file-storage.s3-region:ap-south-2}") String s3Region,
@@ -85,12 +83,24 @@ public class StorageService {
         return "s3".equalsIgnoreCase(mode) || "aws".equalsIgnoreCase(mode);
     }
 
+    private boolean isS3Mode() {
+        return (s3Bucket != null && !s3Bucket.isBlank())
+                || "s3".equalsIgnoreCase(storageMode)
+                || "aws".equalsIgnoreCase(storageMode);
+    }
+
     public String save(MultipartFile file, String category) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot upload empty file");
         }
 
-        if (s3Client != null && s3Bucket != null && !s3Bucket.isBlank()) {
+        if (isS3Mode()) {
+            if (s3Bucket == null || s3Bucket.isBlank()) {
+                if (fallbackToLocal) {
+                    return saveLocally(file, category);
+                }
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "S3 storage is enabled but APP_FILE_STORAGE_S3_BUCKET is not configured");
+            }
             return saveToS3(file, category);
         }
 
@@ -104,7 +114,7 @@ public class StorageService {
         Path target = directory.resolve(name);
         Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
         log.info("Saved file locally at: {}", target);
-        return category + "/" + name;
+        return target.toString().replace('\\', '/');
     }
 
     private String saveToS3(MultipartFile file, String category) throws IOException {
@@ -197,7 +207,10 @@ public class StorageService {
 
         // 3. Try loading from Local Storage
         try {
-            Path file = storageRoot.resolve(normalizedKey);
+            Path file = Path.of(pathStr);
+            if (!Files.exists(file)) {
+                file = storageRoot.resolve(normalizedKey);
+            }
             if (!Files.exists(file)) {
                 // Try resolving just filename inside category subfolders
                 String filename = Path.of(normalizedKey).getFileName().toString();
