@@ -1,0 +1,6 @@
+[submodule "anusha-trde"]
+	path = anusha-trde
+	url = https://github.com/anushatechnologies/anusha-trde.git
+[submodule "investment-web"]
+	path = investment-web
+	url = https://github.com/anushatechnologies/investment-web.git
