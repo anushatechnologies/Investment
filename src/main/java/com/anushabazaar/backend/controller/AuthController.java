@@ -46,6 +46,22 @@ public class AuthController {
         return authService.verifyOtp(request);
     }
 
+    /**
+     * Firebase Phone Auth flow: the app verifies the SMS code with Firebase,
+     * then sends the resulting Firebase ID token here for account lookup and
+     * application-session creation.
+     */
+    @PostMapping("/firebase-mobile/login")
+    public Map<String, Object> firebaseMobileLogin(@RequestBody ApiDtos.VerifyOtpRequest request) {
+        if (request.idToken() == null || request.idToken().isBlank()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Firebase ID token is required"
+            );
+        }
+        return authService.verifyOtp(request);
+    }
+
     @PostMapping("/onboarding/send-otp")
     public Map<String, Object> onboardingSendOtp(@RequestBody ApiDtos.SendOtpRequest request, HttpServletRequest servletRequest) {
         return authService.sendOtp(request, servletRequest);
