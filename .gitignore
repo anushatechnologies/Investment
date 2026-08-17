@@ -7,4 +7,5 @@
 investment-*/
 investment_*/
 package-lock.json
-
+*.aab
+updated-aab/

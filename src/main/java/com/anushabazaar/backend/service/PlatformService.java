@@ -1026,6 +1026,7 @@ public class PlatformService {
         Wallet wallet = walletRepository.findByUserId(userId).orElse(null);
 
         BigDecimal totalInvested = userInvestments.stream()
+                .filter(this::isFundedInvestment)
                 .map(Investment::getInvestmentAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
@@ -1035,6 +1036,7 @@ public class PlatformService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal totalReturns = userInvestments.stream()
+                .filter(this::isFundedInvestment)
                 .map(i -> i.getTotalInterestEarned() != null ? i.getTotalInterestEarned() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
@@ -1185,11 +1187,20 @@ public class PlatformService {
                 "wallet", wallet,
                 "kycStatus", user.getKycStatus(),
                 "activeInvestments", investments.stream().filter(i -> i.getStatus() == DomainEnums.InvestmentStatus.ACTIVE).count(),
-                "totalInvested", investments.stream().map(Investment::getInvestmentAmount).reduce(BigDecimal.ZERO, BigDecimal::add),
-                "totalInterestEarned", investments.stream().map(Investment::getTotalInterestEarned).reduce(BigDecimal.ZERO, BigDecimal::add),
+                "totalInvested", investments.stream().filter(this::isFundedInvestment).map(Investment::getInvestmentAmount).reduce(BigDecimal.ZERO, BigDecimal::add),
+                "totalInterestEarned", investments.stream().filter(this::isFundedInvestment).map(i -> i.getTotalInterestEarned() != null ? i.getTotalInterestEarned() : BigDecimal.ZERO).reduce(BigDecimal.ZERO, BigDecimal::add),
                 "pendingWithdrawals", withdrawalRepository.findByInvestorIdOrderByRequestedAtDesc(user.getId()).stream().filter(w -> w.getStatus() == DomainEnums.WithdrawalStatus.PENDING).count(),
                 "unreadNotifications", notificationRepository.findByUserIdOrderBySentAtDesc(user.getId()).stream().filter(n -> !n.isReadFlag()).count()
         );
+    }
+
+    /** Only payments that have reached a funded investment state count toward assets. */
+    private boolean isFundedInvestment(Investment investment) {
+        if (investment == null || investment.getStatus() == null) return false;
+        return switch (investment.getStatus()) {
+            case ACTIVE, PAUSED, CLOSED, MATURED, EARLY_WITHDRAWAL -> true;
+            default -> false;
+        };
     }
 
     @Transactional
