@@ -284,4 +284,43 @@ public final class ApiDtos {
             String mpin
     ) {
     }
+
+    public record AuthTokenResponse(
+            String status,
+            Boolean success,
+            String message,
+            String tokenType,
+            String accessToken,
+            String token,
+            String refreshToken,
+            Long expiresIn,
+            String userId,
+            String role,
+            String nextStep,
+            java.util.Map<String, Object> user
+    ) {
+        public static AuthTokenResponse of(
+                String accessToken,
+                String refreshToken,
+                String userId,
+                String role,
+                java.util.Map<String, Object> user
+        ) {
+            return new AuthTokenResponse(
+                    "SUCCESS",
+                    true,
+                    "Authentication successful",
+                    "Bearer",
+                    accessToken,
+                    accessToken,
+                    refreshToken,
+                    86400L,
+                    userId,
+                    role,
+                    "DASHBOARD",
+                    user
+            );
+        }
+    }
 }
+
