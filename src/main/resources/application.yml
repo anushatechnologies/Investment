@@ -90,9 +90,9 @@ app:
     service-account-resource: ${APP_FIREBASE_SERVICE_ACCOUNT_RESOURCE:} # classpath resource path
     service-account-path: ${APP_FIREBASE_SERVICE_ACCOUNT_PATH:}      # filesystem path
   razorpay:
-    enabled: ${RAZORPAY_ENABLED:true}
-    key-id: ${RAZORPAY_KEY_ID:}
-    key-secret: ${RAZORPAY_KEY_SECRET:}
-    webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
-    currency: INR
-    auto-capture: true
+    enabled: ${APP_RAZORPAY_ENABLED:${RAZORPAY_ENABLED:true}}
+    key-id: ${APP_RAZORPAY_KEY_ID:${RAZORPAY_KEY_ID:}}
+    key-secret: ${APP_RAZORPAY_KEY_SECRET:${RAZORPAY_KEY_SECRET:}}
+    webhook-secret: ${APP_RAZORPAY_WEBHOOK_SECRET:${RAZORPAY_WEBHOOK_SECRET:}}
+    currency: ${APP_RAZORPAY_CURRENCY:${RAZORPAY_CURRENCY:INR}}
+    auto-capture: ${APP_RAZORPAY_AUTO_CAPTURE:${RAZORPAY_AUTO_CAPTURE:true}}
