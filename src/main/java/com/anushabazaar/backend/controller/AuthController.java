@@ -59,7 +59,7 @@ public class AuthController {
                     "Firebase ID token is required"
             );
         }
-        return authService.verifyOtp(request);
+        return authService.firebaseMobileLogin(request);
     }
 
     @PostMapping("/onboarding/send-otp")

@@ -339,20 +339,88 @@ public class AuthService {
         return response;
     }
 
+    public Map<String, Object> firebaseMobileLogin(ApiDtos.VerifyOtpRequest request) {
+        if (request.idToken() == null || request.idToken().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Firebase ID token is required");
+        }
+
+        FirebasePhoneAuthService.VerifiedFirebasePhone verified;
+        try {
+            verified = firebasePhoneAuthService.verifyPhoneToken(request.idToken());
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Firebase token verification failed: " + ex.getMessage());
+        }
+
+        String verifiedPhone = verified.mobileNumber();
+        String rawPhone = verifiedPhone != null && !verifiedPhone.isBlank()
+                ? verifiedPhone
+                : (request.phone() != null ? request.phone() : (request.mobileNumber() != null ? request.mobileNumber() : request.phoneNumber()));
+
+        if (rawPhone == null || rawPhone.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No mobile number found in Firebase token");
+        }
+
+        String digitsOnly = rawPhone.replaceAll("\\D", "");
+        String cleanPhone = digitsOnly.length() >= 10 ? digitsOnly.substring(digitsOnly.length() - 10) : digitsOnly;
+
+        User user = findUserByIdentifier(cleanPhone)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No account registered with mobile number " + (rawPhone.startsWith("+") ? rawPhone : "+91" + cleanPhone) + ". Please create an account."));
+
+        if (user.getAccountStatus() == DomainEnums.AccountStatus.SUSPENDED || user.getAccountStatus() == DomainEnums.AccountStatus.DEACTIVATED) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Your account has been deactivated. Please contact support.");
+        }
+
+        String accessToken = jwtService.generateAccessToken(
+                user.getEmail() != null && !user.getEmail().isBlank() ? user.getEmail() : user.getMobileNumber(),
+                user.getId(),
+                user.getRole() != null ? user.getRole().name() : "INVESTOR"
+        );
+        TokenRecord refreshToken = issueToken(user.getId(), DomainEnums.TokenType.REFRESH, 24 * 30);
+
+        Map<String, Object> userMap = new HashMap<>();
+        userMap.put("id", user.getId());
+        userMap.put("fullName", user.getFullName() != null ? user.getFullName() : "Investor");
+        userMap.put("name", user.getFullName() != null ? user.getFullName() : "Investor");
+        userMap.put("mobileNumber", user.getMobileNumber() != null ? "+91" + user.getMobileNumber().replaceAll("\\D", "") : "+91" + cleanPhone);
+        userMap.put("phone", cleanPhone);
+        userMap.put("email", user.getEmail() != null ? user.getEmail() : "");
+        userMap.put("role", user.getRole() != null ? user.getRole().name() : "INVESTOR");
+        userMap.put("kycStatus", user.getKycStatus() != null ? user.getKycStatus().name() : "NOT_SUBMITTED");
+        userMap.put("bankVerified", user.getBankAccountNumber() != null && !user.getBankAccountNumber().isBlank());
+        userMap.put("mpinCreated", user.getMpinHash() != null && !user.getMpinHash().isBlank());
+        userMap.put("active", user.getAccountStatus() == DomainEnums.AccountStatus.ACTIVE);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("status", "SUCCESS");
+        response.put("message", "Login successful");
+        response.put("accessToken", accessToken);
+        response.put("token", accessToken);
+        response.put("refreshToken", refreshToken.getTokenValue());
+        response.put("tokenType", "Bearer");
+        response.put("expiresIn", 86400);
+        response.put("userId", user.getId());
+        response.put("user", userMap);
+        return response;
+    }
+
     public Map<String, Object> verifyOtp(ApiDtos.VerifyOtpRequest request) {
         String recipient = extractOtpRecipient(request);
         String code = request.otp() != null && !request.otp().isBlank() ? request.otp() : request.code();
-        if (code == null || code.isBlank()) {
+        boolean hasIdToken = request.idToken() != null && !request.idToken().isBlank();
+
+        if (!hasIdToken && (code == null || code.isBlank())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "OTP code is required");
         }
 
         boolean valid = false;
-        if (request.idToken() != null && !request.idToken().isBlank()) {
+        if (hasIdToken) {
             FirebasePhoneAuthService.VerifiedFirebasePhone verified = firebasePhoneAuthService.verifyPhoneToken(request.idToken());
             recipient = verified.mobileNumber();
             valid = true;
-        }
-        if ("123456".equals(code) || "000000".equals(code)) {
+        } else if ("123456".equals(code) || "000000".equals(code)) {
             valid = true;
         } else if (recipient != null && !recipient.isBlank()) {
             String norm = recipient.toLowerCase().trim();
