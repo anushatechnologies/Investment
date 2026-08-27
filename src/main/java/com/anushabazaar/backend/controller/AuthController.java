@@ -36,12 +36,12 @@ public class AuthController {
         return authService.register(request, servletRequest);
     }
 
-    @PostMapping("/send-otp")
+    @PostMapping({"/send-otp", "/otp/send", "/send-login-otp"})
     public Map<String, Object> sendOtp(@RequestBody ApiDtos.SendOtpRequest request, HttpServletRequest servletRequest) {
         return authService.sendOtp(request, servletRequest);
     }
 
-    @PostMapping("/verify-otp")
+    @PostMapping({"/verify-otp", "/otp/verify", "/verify-login-otp"})
     public Map<String, Object> verifyOtp(@RequestBody ApiDtos.VerifyOtpRequest request) {
         return authService.verifyOtp(request);
     }
@@ -51,17 +51,17 @@ public class AuthController {
      * then sends the resulting Firebase ID token here for account lookup and
      * application-session creation.
      */
-    @PostMapping("/firebase-mobile/login")
+    @PostMapping({"/firebase-mobile/login", "/firebase-login", "/firebase/login", "/mobile/firebase-login"})
     public org.springframework.http.ResponseEntity<Map<String, Object>> firebaseMobileLogin(@RequestBody(required = false) com.anushabazaar.backend.dto.FirebaseLoginRequest request) {
         return authService.firebaseMobileLogin(request);
     }
 
-    @PostMapping("/onboarding/send-otp")
+    @PostMapping({"/onboarding/send-otp", "/onboarding/otp/send"})
     public Map<String, Object> onboardingSendOtp(@RequestBody ApiDtos.SendOtpRequest request, HttpServletRequest servletRequest) {
         return authService.sendOtp(request, servletRequest);
     }
 
-    @PostMapping("/onboarding/verify-otp")
+    @PostMapping({"/onboarding/verify-otp", "/onboarding/otp/verify"})
     public Map<String, Object> onboardingVerifyOtp(@RequestBody ApiDtos.VerifyOtpRequest request) {
         return authService.verifyOtp(request);
     }

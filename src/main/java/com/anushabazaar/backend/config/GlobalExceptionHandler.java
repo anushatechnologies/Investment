@@ -45,7 +45,8 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<ApiErrorResponse> handleBadRequest(Exception ex, HttpServletRequest request) {
         log.warn("Bad request on [{}]: {}", request.getRequestURI(), ex.getMessage());
-        return build(HttpStatus.BAD_REQUEST, "Malformed or invalid request", request, List.of(ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage()));
+        String msg = ex.getMessage() != null && !ex.getMessage().isBlank() ? ex.getMessage() : "Invalid request parameters";
+        return build(HttpStatus.BAD_REQUEST, msg, request, List.of(msg));
     }
 
     @ExceptionHandler(ResponseStatusException.class)

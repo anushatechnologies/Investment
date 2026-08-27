@@ -86,7 +86,11 @@ public final class ApiDtos {
     public record SendOtpRequest(
             String email,
             String mobileNumber,
+            String mobile,
             String phone,
+            String phoneNumber,
+            String username,
+            String identifier,
             String type,
             String channel
     ) {
@@ -95,12 +99,22 @@ public final class ApiDtos {
     public record VerifyOtpRequest(
             String email,
             String mobileNumber,
+            String mobile,
             String phone,
-            String phoneNumber,  // alias used by mobile app alongside phone/mobileNumber
+            String phoneNumber,
+            String username,
+            String identifier,
             String otp,
             String code,
+            String verificationCode,
+            String otpCode,
+            String smsCode,
             String type,
-            String idToken
+            String idToken,
+            String id_token,
+            String token,
+            String firebaseToken,
+            String firebase_token
     ) {
     }
 

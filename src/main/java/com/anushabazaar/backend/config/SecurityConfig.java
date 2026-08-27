@@ -44,26 +44,10 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-                                "/api/auth/register",
+                                "/api/auth/**",
                                 "/api/admin/auth/login",
                                 "/api/admin/auth/verify-2fa",
                                 "/api/admin/auth/refresh",
-                                "/api/auth/send-otp",
-                                "/api/auth/verify-otp",
-                                "/api/auth/firebase-mobile/login",  // Mobile OTP login — must be unauthenticated
-                                "/api/auth/onboarding/**",
-                                "/api/auth/verify-email",
-                                "/api/auth/login",
-                                "/api/auth/mobile-login",
-                                "/api/auth/mpin-login",
-                                "/api/auth/refresh-token",
-                                "/api/auth/forgot-password",
-                                "/api/auth/verify-reset-password-otp",
-                                "/api/auth/reset-password",
-                                "/api/auth/forgot-mpin",
-                                "/api/auth/verify-reset-mpin-otp",
-                                "/api/auth/reset-mpin",
-                                "/api/auth/referrals/validate",
                                 "/api/kyc/pan/verify",
                                 "/api/kyc/pan-verify",
                                 "/api/legal/**",
