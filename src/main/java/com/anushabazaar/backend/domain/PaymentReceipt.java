@@ -1,10 +1,13 @@
 package com.anushabazaar.backend.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -26,9 +29,13 @@ public class PaymentReceipt {
     private BigDecimal paymentAmount;
     private LocalDate paymentDate;
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 50)
     private DomainEnums.PaymentMode paymentMode;
     private String bankReference;
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 50)
     private DomainEnums.ReceiptStatus verificationStatus;
     private String verifiedByAdminId;
     private LocalDateTime verifiedAt;
@@ -38,6 +45,8 @@ public class PaymentReceipt {
     private String receiptNumber;
     private String receiptUrl;
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Column(length = 50)
     private DomainEnums.EmailStatus emailStatus;
 
     public String getId() { return id; }

@@ -46,8 +46,14 @@ public class DatabaseSchemaRepair {
         repairTextColumn("kyc_submission", "selfie_rejection_reason");
         repairTextColumn("kyc_submission", "bank_proof_rejection_reason");
         repairColumn("investment", "status");
+        repairColumn("investment_receipts", "payment_mode");
+        repairColumn("investment_receipts", "verification_status");
+        repairColumn("investment_receipts", "email_status");
+        repairTextColumn("investment_receipts", "rejection_reason");
         repairColumn("payment_receipt", "payment_mode");
         repairColumn("payment_receipt", "verification_status");
+        repairColumn("payment_receipt", "email_status");
+        repairTextColumn("payment_receipt", "rejection_reason");
         repairColumn("wallet_transaction", "transaction_type");
         repairColumn("wallet_transaction", "direction");
         repairColumn("withdrawal_request", "status");
