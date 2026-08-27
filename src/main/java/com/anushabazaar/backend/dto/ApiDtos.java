@@ -285,42 +285,21 @@ public final class ApiDtos {
     ) {
     }
 
-    public record AuthTokenResponse(
-            String status,
-            Boolean success,
-            String message,
-            String tokenType,
-            String accessToken,
+    public record TokenResponse(
             String token,
+            String accessToken,
             String refreshToken,
+            String tokenType,
             Long expiresIn,
             String userId,
             String role,
-            String nextStep,
-            java.util.Map<String, Object> user
+            String status,
+            String message
     ) {
-        public static AuthTokenResponse of(
-                String accessToken,
-                String refreshToken,
-                String userId,
-                String role,
-                java.util.Map<String, Object> user
-        ) {
-            return new AuthTokenResponse(
-                    "SUCCESS",
-                    true,
-                    "Authentication successful",
-                    "Bearer",
-                    accessToken,
-                    accessToken,
-                    refreshToken,
-                    86400L,
-                    userId,
-                    role,
-                    "DASHBOARD",
-                    user
-            );
+        public static TokenResponse of(String token, String refreshToken, String userId, String role) {
+            return new TokenResponse(token, token, refreshToken, "Bearer", 86400L, userId, role, "SUCCESS", "Sign completed successfully");
         }
     }
 }
+
 
