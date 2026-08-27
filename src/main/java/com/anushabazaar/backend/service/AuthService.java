@@ -339,37 +339,56 @@ public class AuthService {
         return response;
     }
 
-    public Map<String, Object> firebaseMobileLogin(ApiDtos.VerifyOtpRequest request) {
-        if (request.idToken() == null || request.idToken().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Firebase ID token is required");
+    public org.springframework.http.ResponseEntity<Map<String, Object>> firebaseMobileLogin(com.anushabazaar.backend.dto.FirebaseLoginRequest request) {
+        if (request == null || request.getIdToken() == null || request.getIdToken().trim().isEmpty()) {
+            return org.springframework.http.ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                    "success", false,
+                    "message", "Firebase authentication token is required"
+            ));
         }
 
         FirebasePhoneAuthService.VerifiedFirebasePhone verified;
         try {
-            verified = firebasePhoneAuthService.verifyPhoneToken(request.idToken());
-        } catch (ResponseStatusException ex) {
-            throw ex;
+            verified = firebasePhoneAuthService.verifyPhoneToken(request.getIdToken().trim());
         } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Firebase token verification failed: " + ex.getMessage());
+            return org.springframework.http.ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "success", false,
+                    "message", "Firebase authentication failed"
+            ));
         }
 
         String verifiedPhone = verified.mobileNumber();
-        String rawPhone = verifiedPhone != null && !verifiedPhone.isBlank()
-                ? verifiedPhone
-                : (request.phone() != null ? request.phone() : (request.mobileNumber() != null ? request.mobileNumber() : request.phoneNumber()));
-
-        if (rawPhone == null || rawPhone.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No mobile number found in Firebase token");
+        if (verifiedPhone == null || verifiedPhone.isBlank()) {
+            return org.springframework.http.ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                    "success", false,
+                    "message", "Firebase token does not contain a verified phone number"
+            ));
         }
 
-        String digitsOnly = rawPhone.replaceAll("\\D", "");
+        String digitsOnly = verifiedPhone.replaceAll("\\D", "");
         String cleanPhone = digitsOnly.length() >= 10 ? digitsOnly.substring(digitsOnly.length() - 10) : digitsOnly;
 
-        User user = findUserByIdentifier(cleanPhone)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No account registered with mobile number " + (rawPhone.startsWith("+") ? rawPhone : "+91" + cleanPhone) + ". Please create an account."));
+        java.util.Optional<User> userOpt = findUserByIdentifier(cleanPhone);
+
+        if (userOpt.isEmpty()) {
+            String signupVerificationToken = "signup_" + UUID.randomUUID().toString().replace("-", "");
+            activeOtpMap.put(signupVerificationToken, cleanPhone);
+
+            Map<String, Object> response = new java.util.LinkedHashMap<>();
+            response.put("success", true);
+            response.put("nextStep", "COMPLETE_PROFILE");
+            response.put("signupVerificationToken", signupVerificationToken);
+            return org.springframework.http.ResponseEntity.ok(response);
+        }
+
+        User user = userOpt.get();
 
         if (user.getAccountStatus() == DomainEnums.AccountStatus.SUSPENDED || user.getAccountStatus() == DomainEnums.AccountStatus.DEACTIVATED) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Your account has been deactivated. Please contact support.");
+            return org.springframework.http.ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+                    "success", false,
+                    "error", "ACCOUNT_DISABLED",
+                    "message", "Your account has been deactivated. Please contact support."
+            ));
         }
 
         String accessToken = jwtService.generateAccessToken(
@@ -377,9 +396,13 @@ public class AuthService {
                 user.getId(),
                 user.getRole() != null ? user.getRole().name() : "INVESTOR"
         );
-        TokenRecord refreshToken = issueToken(user.getId(), DomainEnums.TokenType.REFRESH, 24 * 30);
+        TokenRecord refreshToken = issueToken(user.getId(), DomainEnums.TokenType.REFRESH, refreshExpiryDays * 24);
 
-        Map<String, Object> userMap = new HashMap<>();
+        user.setLastLoginAt(LocalDateTime.now());
+        user.setFailedLoginAttempts(0);
+        userRepository.save(user);
+
+        Map<String, Object> userMap = new java.util.LinkedHashMap<>();
         userMap.put("id", user.getId());
         userMap.put("fullName", user.getFullName() != null ? user.getFullName() : "Investor");
         userMap.put("name", user.getFullName() != null ? user.getFullName() : "Investor");
@@ -392,18 +415,16 @@ public class AuthService {
         userMap.put("mpinCreated", user.getMpinHash() != null && !user.getMpinHash().isBlank());
         userMap.put("active", user.getAccountStatus() == DomainEnums.AccountStatus.ACTIVE);
 
-        Map<String, Object> response = new HashMap<>();
+        Map<String, Object> response = new java.util.LinkedHashMap<>();
         response.put("success", true);
-        response.put("status", "SUCCESS");
-        response.put("message", "Login successful");
+        response.put("nextStep", "DASHBOARD");
         response.put("accessToken", accessToken);
-        response.put("token", accessToken);
         response.put("refreshToken", refreshToken.getTokenValue());
         response.put("tokenType", "Bearer");
         response.put("expiresIn", 86400);
-        response.put("userId", user.getId());
         response.put("user", userMap);
-        return response;
+
+        return org.springframework.http.ResponseEntity.ok(response);
     }
 
     public Map<String, Object> verifyOtp(ApiDtos.VerifyOtpRequest request) {

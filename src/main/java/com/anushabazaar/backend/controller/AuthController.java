@@ -52,13 +52,7 @@ public class AuthController {
      * application-session creation.
      */
     @PostMapping("/firebase-mobile/login")
-    public Map<String, Object> firebaseMobileLogin(@RequestBody ApiDtos.VerifyOtpRequest request) {
-        if (request.idToken() == null || request.idToken().isBlank()) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                    org.springframework.http.HttpStatus.BAD_REQUEST,
-                    "Firebase ID token is required"
-            );
-        }
+    public org.springframework.http.ResponseEntity<Map<String, Object>> firebaseMobileLogin(@RequestBody(required = false) com.anushabazaar.backend.dto.FirebaseLoginRequest request) {
         return authService.firebaseMobileLogin(request);
     }
 
