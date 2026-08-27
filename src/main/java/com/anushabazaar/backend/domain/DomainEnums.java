@@ -60,11 +60,26 @@ public final class DomainEnums {
     }
 
     public enum PaymentMode {
+        BANK_TRANSFER,
+        UPI,
         NEFT,
         RTGS,
         IMPS,
-        UPI,
-        CASH
+        RAZORPAY,
+        ONLINE,
+        CASH;
+
+        @com.fasterxml.jackson.annotation.JsonCreator
+        public static PaymentMode fromString(String value) {
+            if (value == null || value.isBlank()) return null;
+            String normalized = value.trim().toUpperCase().replace(" ", "_").replace("-", "_");
+            for (PaymentMode mode : PaymentMode.values()) {
+                if (mode.name().equalsIgnoreCase(normalized)) {
+                    return mode;
+                }
+            }
+            throw new IllegalArgumentException("Unknown payment mode: " + value);
+        }
     }
 
     public enum WalletTransactionType {
