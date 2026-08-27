@@ -94,6 +94,9 @@ public final class ApiDtos {
             String type,
             String channel
     ) {
+        public SendOtpRequest(String email, String mobileNumber, String phone, String type, String channel) {
+            this(email, mobileNumber, null, phone, null, null, null, type, channel);
+        }
     }
 
     public record VerifyOtpRequest(
@@ -116,6 +119,13 @@ public final class ApiDtos {
             String firebaseToken,
             String firebase_token
     ) {
+        public VerifyOtpRequest(String email, String mobileNumber, String phone, String phoneNumber, String otp, String code, String type, String idToken) {
+            this(email, mobileNumber, null, phone, phoneNumber, null, null, otp, code, null, null, null, type, idToken, null, null, null, null);
+        }
+
+        public VerifyOtpRequest(String mobileNumber, String otp) {
+            this(null, mobileNumber, null, null, null, null, null, otp, null, null, null, null, null, null, null, null, null, null);
+        }
     }
 
     public record SetMpinRequest(
