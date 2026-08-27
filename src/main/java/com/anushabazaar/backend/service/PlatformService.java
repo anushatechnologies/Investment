@@ -544,7 +544,10 @@ public class PlatformService {
 
     @Transactional
     public Investment cancelInvestment(User user, String id, ApiDtos.CancelInvestmentRequest body, HttpServletRequest request) {
-        Investment investment = getOwnInvestment(user, id);
+        Investment investment = getInvestment(id);
+        if (!investment.getInvestorUserId().equals(user.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your investment");
+        }
         if (investment.getStatus() == DomainEnums.InvestmentStatus.ACTIVE) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Active investments cannot be cancelled from this endpoint");
         }
