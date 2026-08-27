@@ -81,6 +81,14 @@ app:
   sms:
     fast2sms-api-key: ${FAST2SMS_API_KEY:}
     enabled: ${SMS_ENABLED:true}
+  firebase:
+    # Must match the project used by the mobile app's google-services.json: anushabazaar-2288e
+    project-id: ${APP_FIREBASE_PROJECT_ID:anushabazaar-2288e}
+    # Supply ONE of the following to load the Firebase service account credentials:
+    service-account-json: ${APP_FIREBASE_SERVICE_ACCOUNT_JSON:}      # raw JSON string
+    service-account-base64: ${APP_FIREBASE_SERVICE_ACCOUNT_BASE64:}  # base64-encoded JSON
+    service-account-resource: ${APP_FIREBASE_SERVICE_ACCOUNT_RESOURCE:} # classpath resource path
+    service-account-path: ${APP_FIREBASE_SERVICE_ACCOUNT_PATH:}      # filesystem path
   razorpay:
     enabled: ${RAZORPAY_ENABLED:true}
     key-id: ${RAZORPAY_KEY_ID:}

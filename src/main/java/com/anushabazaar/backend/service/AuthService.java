@@ -377,6 +377,7 @@ public class AuthService {
 
         Map<String, Object> response = new HashMap<>();
         response.put("status", "SUCCESS");
+        response.put("success", true);
         response.put("message", "OTP verified successfully");
         response.put("verified", true);
         response.put("userExists", userExists);
@@ -388,13 +389,7 @@ public class AuthService {
             User user = existingUser.get();
             response.put("nextStep", "DASHBOARD");
             response.put("userId", user.getId());
-            response.put("user", Map.of(
-                "id", user.getId(),
-                "name", user.getFullName() != null ? user.getFullName() : "Investor",
-                "fullName", user.getFullName() != null ? user.getFullName() : "Investor",
-                "mobileNumber", user.getMobileNumber() != null ? user.getMobileNumber() : recipient,
-                "email", user.getEmail() != null ? user.getEmail() : ""
-            ));
+            response.put("user", buildUserMap(user, recipient));
             String accessToken = jwtService.generateAccessToken(
                 user.getEmail() != null ? user.getEmail() : user.getMobileNumber(),
                 user.getId(),
@@ -410,6 +405,23 @@ public class AuthService {
         return response;
     }
 
+    /** Builds the full user payload expected by the mobile client post-OTP login. */
+    private Map<String, Object> buildUserMap(User user, String fallbackMobile) {
+        Map<String, Object> u = new HashMap<>();
+        u.put("id", user.getId());
+        u.put("name", user.getFullName() != null ? user.getFullName() : "Investor");
+        u.put("fullName", user.getFullName() != null ? user.getFullName() : "Investor");
+        u.put("mobile", user.getMobileNumber() != null ? "+91" + user.getMobileNumber() : fallbackMobile);
+        u.put("mobileNumber", user.getMobileNumber() != null ? user.getMobileNumber() : fallbackMobile);
+        u.put("email", user.getEmail() != null ? user.getEmail() : "");
+        u.put("accountStatus", user.getAccountStatus() != null ? user.getAccountStatus().name() : "ACTIVE");
+        u.put("kycStatus", user.getKycStatus() != null ? user.getKycStatus().name() : "NOT_SUBMITTED");
+        u.put("bankVerified", user.getBankAccountNumber() != null && !user.getBankAccountNumber().isBlank());
+        u.put("mpinCreated", user.getMpinHash() != null && !user.getMpinHash().isBlank());
+        u.put("role", user.getRole() != null ? user.getRole().name() : "INVESTOR");
+        return u;
+    }
+
     private String extractOtpRecipient(ApiDtos.SendOtpRequest request) {
         if (request == null) return null;
         if (request.email() != null && !request.email().isBlank()) return request.email();
@@ -423,6 +435,7 @@ public class AuthService {
         if (request.email() != null && !request.email().isBlank()) return request.email();
         if (request.mobileNumber() != null && !request.mobileNumber().isBlank()) return request.mobileNumber();
         if (request.phone() != null && !request.phone().isBlank()) return request.phone();
+        if (request.phoneNumber() != null && !request.phoneNumber().isBlank()) return request.phoneNumber(); // mobile app alias
         return null;
     }
 
@@ -725,7 +738,7 @@ public class AuthService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found for mobile number"));
 
         if (request.idToken() == null || request.idToken().isBlank()) {
-            ApiDtos.VerifyOtpRequest verifyReq = new ApiDtos.VerifyOtpRequest(null, user.getMobileNumber(), null, code, code, "PASSWORD_RESET", null);
+            ApiDtos.VerifyOtpRequest verifyReq = new ApiDtos.VerifyOtpRequest(null, user.getMobileNumber(), null, null, code, code, "PASSWORD_RESET", null);
             verifyOtp(verifyReq);
         } else {
             FirebasePhoneAuthService.VerifiedFirebasePhone verified = firebasePhoneAuthService.verifyPhoneToken(request.idToken());
@@ -835,7 +848,7 @@ public class AuthService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found for mobile number"));
 
         if (request.idToken() == null || request.idToken().isBlank()) {
-            ApiDtos.VerifyOtpRequest verifyReq = new ApiDtos.VerifyOtpRequest(null, user.getMobileNumber(), null, code, code, "MPIN_RESET", null);
+            ApiDtos.VerifyOtpRequest verifyReq = new ApiDtos.VerifyOtpRequest(null, user.getMobileNumber(), null, null, code, code, "MPIN_RESET", null);
             verifyOtp(verifyReq);
         } else {
             FirebasePhoneAuthService.VerifiedFirebasePhone verified = firebasePhoneAuthService.verifyPhoneToken(request.idToken());

@@ -105,6 +105,11 @@ public class ReceiptService {
         return "PENDING";
     }
 
+    /** Public facade for other services to ensure receipt has number and URL populated. */
+    public void ensureReceiptFields(PaymentReceipt receipt) {
+        ensureReceiptNumberAndUrl(receipt);
+    }
+
     private void ensureReceiptNumberAndUrl(PaymentReceipt receipt) {
         boolean updated = false;
         if (receipt.getReceiptNumber() == null || receipt.getReceiptNumber().isBlank()) {

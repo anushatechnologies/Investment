@@ -29,7 +29,7 @@ public class ReceiptController {
         return receiptService.getReceiptStatus(currentUserService.requireCurrentUser(), investmentId);
     }
 
-    @GetMapping(value = "/{investmentId}/invoice", produces = MediaType.TEXT_HTML_VALUE)
+    @GetMapping(value = {"/{investmentId}/invoice", "/{investmentId}/download"}, produces = MediaType.TEXT_HTML_VALUE)
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<String> invoice(@PathVariable("investmentId") String investmentId) {
         return ResponseEntity.ok(receiptService.renderInvoice(currentUserService.requireCurrentUser(), investmentId));

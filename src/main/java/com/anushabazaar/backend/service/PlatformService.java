@@ -4,6 +4,7 @@ import com.anushabazaar.backend.domain.*;
 import com.anushabazaar.backend.dto.ApiDtos;
 import com.anushabazaar.backend.repository.*;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +52,7 @@ public class PlatformService {
     private final StorageService storageService;
     private final AuditService auditService;
     private final ReceiptService receiptService;
+    private final String invoiceBaseUrl;
 
     public PlatformService(UserRepository userRepository,
                            KycSubmissionRepository kycSubmissionRepository,
@@ -71,7 +73,8 @@ public class PlatformService {
                            AuditLogRepository auditLogRepository,
                            StorageService storageService,
                            AuditService auditService,
-                           ReceiptService receiptService) {
+                           ReceiptService receiptService,
+                           @Value("${app.email.invoice-base-url:http://localhost:8080}") String invoiceBaseUrl) {
         this.userRepository = userRepository;
         this.kycSubmissionRepository = kycSubmissionRepository;
         this.bankAccountRepository = bankAccountRepository;
@@ -92,6 +95,7 @@ public class PlatformService {
         this.storageService = storageService;
         this.auditService = auditService;
         this.receiptService = receiptService;
+        this.invoiceBaseUrl = invoiceBaseUrl;
     }
 
     @Transactional
@@ -471,16 +475,71 @@ public class PlatformService {
         return saved;
     }
 
-    public List<Investment> getOwnInvestments(User user) {
-        return investmentRepository.findByInvestorUserId(user.getId());
+    public List<Map<String, Object>> getOwnInvestments(User user) {
+        List<Investment> investments = investmentRepository.findByInvestorUserId(user.getId());
+        return investments.stream().map(this::enrichInvestmentWithReceipt).toList();
     }
 
-    public Investment getOwnInvestment(User user, String id) {
+    public Map<String, Object> getOwnInvestment(User user, String id) {
         Investment investment = getInvestment(id);
         if (!investment.getInvestorUserId().equals(user.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your investment");
         }
-        return investment;
+        return enrichInvestmentWithReceipt(investment);
+    }
+
+    /**
+     * Converts an Investment entity to a response Map and attaches the receipt
+     * metadata so the mobile app can display "View Receipt" / "Download Receipt".
+     */
+    private Map<String, Object> enrichInvestmentWithReceipt(Investment investment) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", investment.getId());
+        map.put("investorUserId", investment.getInvestorUserId());
+        map.put("investmentPlanId", investment.getInvestmentPlanId());
+        map.put("investmentAmount", investment.getInvestmentAmount());
+        map.put("amount", investment.getInvestmentAmount());
+        map.put("status", investment.getStatus());
+        map.put("appliedAt", investment.getAppliedAt());
+        map.put("activatedAt", investment.getActivatedAt());
+        map.put("maturityDate", investment.getMaturityDate());
+        map.put("monthlyInterestRate", investment.getMonthlyInterestRate());
+        map.put("totalInterestEarned", investment.getTotalInterestEarned());
+        map.put("earned", investment.getTotalInterestEarned() != null ? investment.getTotalInterestEarned() : BigDecimal.ZERO);
+        map.put("totalPrincipalReturned", investment.getTotalPrincipalReturned());
+        map.put("receiptApproved", investment.isReceiptApproved());
+        map.put("notes", investment.getNotes());
+
+        // Look up the plan name
+        try {
+            InvestmentPlan plan = getPlan(investment.getInvestmentPlanId());
+            map.put("planName", plan.getPlanName());
+        } catch (Exception e) {
+            map.put("planName", "Investment Plan");
+        }
+
+        // Attach receipt metadata
+        paymentReceiptRepository.findTopByInvestmentIdOrderByUploadedAtDesc(investment.getId())
+                .ifPresentOrElse(receipt -> {
+                    receiptService.ensureReceiptFields(receipt);
+                    Map<String, Object> receiptMap = new LinkedHashMap<>();
+                    receiptMap.put("available", true);
+                    receiptMap.put("receiptNumber", receipt.getReceiptNumber());
+                    receiptMap.put("receiptUrl", invoiceBaseUrl + receipt.getReceiptUrl());
+                    receiptMap.put("receiptDate", receipt.getPaymentDate() != null ? receipt.getPaymentDate().toString() : null);
+                    receiptMap.put("emailStatus", receipt.getEmailStatus() != null ? receipt.getEmailStatus().name() : "NOT_SENT");
+                    map.put("receipt", receiptMap);
+                }, () -> {
+                    Map<String, Object> receiptMap = new LinkedHashMap<>();
+                    receiptMap.put("available", false);
+                    receiptMap.put("receiptNumber", null);
+                    receiptMap.put("receiptUrl", null);
+                    receiptMap.put("receiptDate", null);
+                    receiptMap.put("emailStatus", "NOT_SENT");
+                    map.put("receipt", receiptMap);
+                });
+
+        return map;
     }
 
     @Transactional

@@ -50,6 +50,7 @@ public class SecurityConfig {
                                 "/api/admin/auth/refresh",
                                 "/api/auth/send-otp",
                                 "/api/auth/verify-otp",
+                                "/api/auth/firebase-mobile/login",  // Mobile OTP login — must be unauthenticated
                                 "/api/auth/onboarding/**",
                                 "/api/auth/verify-email",
                                 "/api/auth/login",
@@ -57,6 +58,7 @@ public class SecurityConfig {
                                 "/api/auth/mpin-login",
                                 "/api/auth/refresh-token",
                                 "/api/auth/forgot-password",
+                                "/api/auth/verify-reset-password-otp",
                                 "/api/auth/reset-password",
                                 "/api/auth/forgot-mpin",
                                 "/api/auth/verify-reset-mpin-otp",

@@ -96,6 +96,7 @@ public final class ApiDtos {
             String email,
             String mobileNumber,
             String phone,
+            String phoneNumber,  // alias used by mobile app alongside phone/mobileNumber
             String otp,
             String code,
             String type,
