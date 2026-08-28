@@ -152,7 +152,6 @@ public class PlatformService {
         response.put("accountStatus", user.getAccountStatus() != null ? user.getAccountStatus().name() : "PENDING");
         response.put("onboardingStatus", user.getAccountStatus() != null ? user.getAccountStatus().name() : "PENDING");
         response.put("bankVerified", user.isBankVerified());
-        response.put("mpinCreated", user.getMpinHash() != null && !user.getMpinHash().isBlank());
         boolean canUpload = user.getKycStatus() == null || user.getKycStatus() == DomainEnums.KycStatus.NOT_SUBMITTED || user.getKycStatus() == DomainEnums.KycStatus.REJECTED;
         response.put("canUpload", canUpload);
 

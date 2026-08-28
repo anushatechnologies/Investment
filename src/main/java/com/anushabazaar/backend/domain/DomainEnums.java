@@ -32,7 +32,6 @@ public final class DomainEnums {
 
     public enum RegistrationStepStatus {
         MOBILE_VERIFIED,
-        MPIN_CREATED,
         PROFILE_COMPLETED,
         PAN_VERIFIED,
         KYC_VERIFIED,

@@ -128,12 +128,6 @@ public final class ApiDtos {
         }
     }
 
-    public record SetMpinRequest(
-            String mpin,
-            String password
-    ) {
-    }
-
     public record RefreshTokenRequest(@NotBlank String refreshToken) {
     }
 
@@ -147,18 +141,6 @@ public final class ApiDtos {
     }
 
     public record ChangePasswordRequest(@NotBlank String currentPassword, @Size(min = 6) String newPassword) {
-    }
-
-    public record ForgotMpinRequest(String mobileNumber, String mobile, String phone) {
-    }
-
-    public record VerifyResetMpinOtpRequest(String mobileNumber, String mobile, String phone, String otp, String code, String idToken) {
-    }
-
-    public record ResetMpinRequest(String mobileNumber, String mobile, String phone, String resetToken, String token, String newMpin, String mpin, String otp, String code) {
-    }
-
-    public record ChangeMpinRequest(String currentMpin, String newMpin) {
     }
 
     public record VerifyPanRequest(String panNumber, String pan) {
@@ -299,13 +281,6 @@ public final class ApiDtos {
             String message,
             String targetAudience,
             String channel
-    ) {
-    }
-
-    public record MpinLoginRequest(
-            String mobileNumber,
-            String mobile,
-            String mpin
     ) {
     }
 

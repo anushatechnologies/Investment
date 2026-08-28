@@ -77,7 +77,7 @@ public class AuthService {
         String mobile = request.mobileNumber() != null && !request.mobileNumber().isBlank() ? request.mobileNumber().trim() : (request.phone() != null && !request.phone().isBlank() ? request.phone().trim() : null);
         String email = request.email() != null && !request.email().isBlank() ? request.email().toLowerCase().trim() : (mobile != null ? mobile + "@anusha.trade" : "user_" + UUID.randomUUID().toString().substring(0, 8) + "@anusha.trade");
         String name = request.fullName() != null && !request.fullName().isBlank() ? request.fullName().trim() : (request.name() != null && !request.name().isBlank() ? request.name().trim() : "Investor");
-        String pass = request.password() != null && !request.password().isBlank() ? request.password() : (request.mpin() != null && !request.mpin().isBlank() ? request.mpin() : "Admin@123");
+        String pass = request.password() != null && !request.password().isBlank() ? request.password() : "Admin@123";
         String pan = request.panNumber() != null && !request.panNumber().isBlank() ? request.panNumber().trim().toUpperCase() : (request.pan() != null && !request.pan().isBlank() ? request.pan().trim().toUpperCase() : null);
         String aadhaar = request.aadhaarLast4() != null && !request.aadhaarLast4().isBlank() ? request.aadhaarLast4().trim() : (request.aadhaar() != null && !request.aadhaar().isBlank() ? request.aadhaar().trim() : null);
         String addr = request.address() != null && !request.address().isBlank() ? request.address().trim() : null;
@@ -122,9 +122,6 @@ public class AuthService {
         user.setEmail(email);
         user.setMobileNumber(mobile != null ? mobile : "9000000000");
         user.setPasswordHash(passwordEncoder.encode(pass));
-        if (request.mpin() != null && !request.mpin().isBlank()) {
-            user.setMpinHash(passwordEncoder.encode(request.mpin()));
-        }
         user.setDateOfBirth(parseDateOfBirth(request.dateOfBirth(), request.dob()));
         user.setPanNumber(pan);
         user.setAadhaarLast4(aadhaar);
@@ -204,7 +201,7 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email or Mobile number is required");
         }
         if (secret == null || secret.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password or MPIN is required");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password is required");
         }
 
         User user = findUserByIdentifier(identifier)
@@ -216,65 +213,19 @@ public class AuthService {
     @Transactional
     public Map<String, Object> mobileLogin(ApiDtos.MobileLoginRequest request, HttpServletRequest servletRequest) {
         String mobile = request.mobileNumber() != null ? request.mobileNumber() : request.phone();
-        String secret = request.mpin() != null && !request.mpin().isBlank() ? request.mpin() : request.password();
+        String secret = request.password();
 
         if (mobile == null || mobile.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mobile number is required");
         }
         if (secret == null || secret.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN or Password is required");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password is required");
         }
 
         User user = findUserByIdentifier(mobile)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid mobile number or MPIN"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid mobile number or password"));
 
         return processUserLogin(user, secret, servletRequest);
-    }
-
-    @Transactional
-    public Map<String, Object> setMpin(User user, ApiDtos.SetMpinRequest request, HttpServletRequest servletRequest) {
-        if (request.mpin() == null || request.mpin().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN is required");
-        }
-        String mpin = request.mpin().trim();
-        if (!mpin.matches("\\d{4,6}")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN must be 4 to 6 numeric digits");
-        }
-        List<String> weakPatterns = List.of(
-            "0000", "1111", "2222", "3333", "4444", "5555", "6666", "7777", "8888", "9999",
-            "1234", "2345", "3456", "4567", "5678", "6789", "7890",
-            "4321", "5432", "6543", "7654", "8765", "9876", "0987",
-            "123456", "654321", "000000", "111111"
-        );
-        if (weakPatterns.contains(mpin)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Please choose a stronger MPIN. Avoid simple patterns like 1234 or 1111.");
-        }
-        user.setMpinHash(passwordEncoder.encode(mpin));
-        user.setUpdatedAt(LocalDateTime.now());
-        userRepository.save(user);
-        auditService.log(user, "SET_MPIN", "User", user.getId(), null, "MPIN set successfully", servletRequest);
-        return Map.of(
-            "message", "MPIN updated successfully",
-            "mpinCreated", true
-        );
-    }
-
-    @Transactional
-    public Map<String, Object> verifyMpin(User user, ApiDtos.SetMpinRequest request) {
-        if (request.mpin() == null || request.mpin().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MPIN is required");
-        }
-        String mpin = request.mpin().trim();
-        if (user.getMpinHash() == null) {
-            user.setMpinHash(passwordEncoder.encode(mpin));
-            user.setUpdatedAt(LocalDateTime.now());
-            userRepository.save(user);
-            return Map.of("status", "SUCCESS", "verified", true, "message", "MPIN initialized and verified successfully");
-        }
-        if (!passwordEncoder.matches(mpin, user.getMpinHash())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid MPIN");
-        }
-        return Map.of("status", "SUCCESS", "verified", true, "message", "MPIN verified successfully");
     }
 
     public Map<String, Object> sendOtp(ApiDtos.SendOtpRequest request, HttpServletRequest servletRequest) {
@@ -430,7 +381,6 @@ public class AuthService {
         userMap.put("role", user.getRole() != null ? user.getRole().name() : "INVESTOR");
         userMap.put("kycStatus", user.getKycStatus() != null ? user.getKycStatus().name() : "NOT_SUBMITTED");
         userMap.put("bankVerified", user.getBankAccountNumber() != null && !user.getBankAccountNumber().isBlank());
-        userMap.put("mpinCreated", user.getMpinHash() != null && !user.getMpinHash().isBlank());
         userMap.put("active", user.getAccountStatus() == DomainEnums.AccountStatus.ACTIVE);
         userMap.put("accountStatus", user.getAccountStatus() != null ? user.getAccountStatus().name() : "ACTIVE");
 
@@ -548,7 +498,6 @@ public class AuthService {
         u.put("accountStatus", user.getAccountStatus() != null ? user.getAccountStatus().name() : "ACTIVE");
         u.put("kycStatus", user.getKycStatus() != null ? user.getKycStatus().name() : "NOT_SUBMITTED");
         u.put("bankVerified", user.getBankAccountNumber() != null && !user.getBankAccountNumber().isBlank());
-        u.put("mpinCreated", user.getMpinHash() != null && !user.getMpinHash().isBlank());
         u.put("role", user.getRole() != null ? user.getRole().name() : "INVESTOR");
         return u;
     }
@@ -603,15 +552,7 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account is temporarily locked");
         }
 
-        boolean secretMatches = false;
-        if (user.getMpinHash() != null && passwordEncoder.matches(secret, user.getMpinHash())) {
-            secretMatches = true;
-        } else if (user.getPasswordHash() != null && passwordEncoder.matches(secret, user.getPasswordHash())) {
-            secretMatches = true;
-            if (user.getMpinHash() == null && secret.length() <= 6 && secret.matches("\\d+")) {
-                user.setMpinHash(passwordEncoder.encode(secret));
-            }
-        }
+        boolean secretMatches = user.getPasswordHash() != null && passwordEncoder.matches(secret, user.getPasswordHash());
 
         if (!secretMatches) {
             user.setFailedLoginAttempts(user.getFailedLoginAttempts() + 1);
@@ -656,7 +597,6 @@ public class AuthService {
     }
 
     private String extractSecret(ApiDtos.LoginRequest request) {
-        if (request.mpin() != null && !request.mpin().isBlank()) return request.mpin();
         if (request.password() != null && !request.password().isBlank()) return request.password();
         return null;
     }
@@ -976,131 +916,6 @@ public class AuthService {
         return Map.of("message", "Password updated successfully");
     }
 
-    @Transactional
-    public Map<String, Object> forgotMpin(ApiDtos.ForgotMpinRequest request, HttpServletRequest servletRequest) {
-        String mobile = request.mobileNumber() != null && !request.mobileNumber().isBlank() ? request.mobileNumber() : request.phone();
-        if (mobile == null || mobile.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mobile number is required");
-        }
-        User user = findUserByIdentifier(mobile)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found for mobile number"));
-
-        ApiDtos.SendOtpRequest otpReq = new ApiDtos.SendOtpRequest(null, user.getMobileNumber(), null, "MPIN_RESET", "SMS");
-        Map<String, Object> otpRes = sendOtp(otpReq, servletRequest);
-
-        Map<String, Object> response = new HashMap<>(otpRes);
-        response.put("message", "OTP sent to registered mobile for MPIN reset");
-        response.put("mobileNumber", user.getMobileNumber());
-        return response;
-    }
-
-    @Transactional
-    public Map<String, Object> verifyResetMpinOtp(ApiDtos.VerifyResetMpinOtpRequest request) {
-        String mobile = request.mobileNumber() != null && !request.mobileNumber().isBlank() ? request.mobileNumber() : request.phone();
-        String code = request.otp() != null && !request.otp().isBlank() ? request.otp() : request.code();
-
-        if (mobile == null || mobile.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mobile number is required");
-        }
-
-        User user = findUserByIdentifier(mobile)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found for mobile number"));
-
-        if (request.idToken() == null || request.idToken().isBlank()) {
-            ApiDtos.VerifyOtpRequest verifyReq = new ApiDtos.VerifyOtpRequest(null, user.getMobileNumber(), null, null, code, code, "MPIN_RESET", null);
-            verifyOtp(verifyReq);
-        } else {
-            FirebasePhoneAuthService.VerifiedFirebasePhone verified = firebasePhoneAuthService.verifyPhoneToken(request.idToken());
-            user = findUserByIdentifier(verified.mobileNumber())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found for verified mobile number"));
-        }
-
-        TokenRecord resetToken = issueToken(user.getId(), DomainEnums.TokenType.PASSWORD_RESET, 1);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("status", "SUCCESS");
-        response.put("verified", true);
-        response.put("message", "OTP verified. Proceed to set new MPIN.");
-        response.put("resetToken", resetToken.getTokenValue());
-        response.put("mobileNumber", user.getMobileNumber());
-        return response;
-    }
-
-    @Transactional
-    public Map<String, Object> resetMpin(ApiDtos.ResetMpinRequest request) {
-        String tokenVal = request.resetToken() != null && !request.resetToken().isBlank() ? request.resetToken() : request.token();
-        String newMpin = request.newMpin() != null && !request.newMpin().isBlank() ? request.newMpin() : request.mpin();
-        String mobile = request.mobileNumber() != null && !request.mobileNumber().isBlank() ? request.mobileNumber() : request.phone();
-
-        if (newMpin == null || !newMpin.matches("\\d{4,6}")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valid 4 to 6 digit MPIN is required");
-        }
-
-        List<String> weakPatterns = List.of("0000", "1111", "2222", "3333", "4444", "5555", "6666", "7777", "8888", "9999", "1234", "4321");
-        if (weakPatterns.contains(newMpin)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Please choose a stronger MPIN.");
-        }
-
-        User user = null;
-        if (tokenVal != null && !tokenVal.isBlank()) {
-            TokenRecord record = tokenRecordRepository.findByTokenValueAndTokenTypeAndUsedFalse(tokenVal, DomainEnums.TokenType.PASSWORD_RESET)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid or expired reset token"));
-            if (record.getExpiresAt().isBefore(LocalDateTime.now())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reset token has expired");
-            }
-            user = userRepository.findById(record.getUserId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-            record.setUsed(true);
-            tokenRecordRepository.save(record);
-        } else if (mobile != null && !mobile.isBlank()) {
-            user = findUserByIdentifier(mobile)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-        } else {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reset token or verified mobile number is required");
-        }
-
-        user.setMpinHash(passwordEncoder.encode(newMpin.trim()));
-        user.setFailedLoginAttempts(0);
-        user.setAccountLockedUntil(null);
-        user.setUpdatedAt(LocalDateTime.now());
-        userRepository.save(user);
-
-        return Map.of(
-            "status", "SUCCESS",
-            "message", "MPIN reset successfully. You can now login with your new MPIN.",
-            "mpinReset", true
-        );
-    }
-
-    @Transactional
-    public Map<String, Object> changeMpin(User user, ApiDtos.ChangeMpinRequest request) {
-        if (request.currentMpin() == null || request.currentMpin().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current MPIN is required");
-        }
-        if (request.newMpin() == null || !request.newMpin().matches("\\d{4,6}")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New MPIN must be 4 to 6 numeric digits");
-        }
-
-        if (user.getMpinHash() != null && !passwordEncoder.matches(request.currentMpin().trim(), user.getMpinHash())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current MPIN is incorrect");
-        }
-
-        List<String> weakPatterns = List.of("0000", "1111", "2222", "3333", "4444", "5555", "6666", "7777", "8888", "9999", "1234", "4321");
-        if (weakPatterns.contains(request.newMpin().trim())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Please choose a stronger MPIN.");
-        }
-
-        user.setMpinHash(passwordEncoder.encode(request.newMpin().trim()));
-        user.setUpdatedAt(LocalDateTime.now());
-        userRepository.save(user);
-
-        return Map.of(
-            "status", "SUCCESS",
-            "message", "MPIN changed successfully",
-            "mpinChanged", true
-        );
-    }
-
     public Map<String, Object> verifyPan(ApiDtos.VerifyPanRequest request) {
         String pan = request.panNumber() != null && !request.panNumber().isBlank() ? request.panNumber() : request.pan();
         if (pan == null || !pan.trim().toUpperCase().matches("^[A-Z]{5}[0-9]{4}[A-Z]{1}$")) {
@@ -1182,7 +997,6 @@ public class AuthService {
             result.put("onboardingStatus", user.getAccountStatus() != null ? user.getAccountStatus().name() : "PENDING");
             result.put("kycStatus", user.getKycStatus() != null ? user.getKycStatus().name() : "NOT_SUBMITTED");
             result.put("bankVerified", bankVerified);
-            result.put("mpinCreated", user.getMpinHash() != null);
             result.put("nextStep", !kycApproved ? "KYC" : "BANK");
             return result;
         }
@@ -1197,8 +1011,7 @@ public class AuthService {
         result.put("onboardingStatus", "ACTIVE");
         result.put("kycStatus", user.getKycStatus().name());
         result.put("bankVerified", true);
-        result.put("mpinCreated", user.getMpinHash() != null);
-        result.put("nextStep", user.getMpinHash() == null ? "MPIN" : "DASHBOARD");
+        result.put("nextStep", "DASHBOARD");
         return result;
     }
 

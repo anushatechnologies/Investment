@@ -86,21 +86,6 @@ public class AuthController {
         return authService.mobileLogin(request, servletRequest);
     }
 
-    @PostMapping("/mpin-login")
-    public Map<String, Object> mpinLogin(@RequestBody ApiDtos.MobileLoginRequest request, HttpServletRequest servletRequest) {
-        return authService.mobileLogin(request, servletRequest);
-    }
-
-    @PostMapping("/set-mpin")
-    public Map<String, Object> setMpin(@RequestBody ApiDtos.SetMpinRequest request, HttpServletRequest servletRequest) {
-        return authService.setMpin(currentUserService.requireCurrentUser(), request, servletRequest);
-    }
-
-    @PostMapping("/verify-mpin")
-    public Map<String, Object> verifyMpin(@RequestBody ApiDtos.SetMpinRequest request) {
-        return authService.verifyMpin(currentUserService.requireCurrentUser(), request);
-    }
-
     @PostMapping("/refresh-token")
     public Map<String, Object> refresh(@Valid @RequestBody ApiDtos.RefreshTokenRequest request) {
         return authService.refresh(request);
@@ -129,42 +114,6 @@ public class AuthController {
     @PostMapping("/change-password")
     public Map<String, Object> changePassword(@Valid @RequestBody ApiDtos.ChangePasswordRequest request) {
         return authService.changePassword(currentUserService.requireCurrentUser(), request);
-    }
-
-    /**
-     * POST /api/auth/forgot-mpin
-     * Initiates MPIN reset by sending OTP to registered mobile number.
-     */
-    @PostMapping("/forgot-mpin")
-    public Map<String, Object> forgotMpin(@RequestBody ApiDtos.ForgotMpinRequest request, HttpServletRequest servletRequest) {
-        return authService.forgotMpin(request, servletRequest);
-    }
-
-    /**
-     * POST /api/auth/verify-reset-mpin-otp
-     * Verifies the OTP sent for MPIN reset and returns a reset token.
-     */
-    @PostMapping("/verify-reset-mpin-otp")
-    public Map<String, Object> verifyResetMpinOtp(@RequestBody ApiDtos.VerifyResetMpinOtpRequest request) {
-        return authService.verifyResetMpinOtp(request);
-    }
-
-    /**
-     * POST /api/auth/reset-mpin
-     * Resets the MPIN using the verified reset token or mobile number.
-     */
-    @PostMapping("/reset-mpin")
-    public Map<String, Object> resetMpin(@RequestBody ApiDtos.ResetMpinRequest request) {
-        return authService.resetMpin(request);
-    }
-
-    /**
-     * POST /api/auth/change-mpin
-     * Changes MPIN for an authenticated user after verifying their current MPIN.
-     */
-    @PostMapping("/change-mpin")
-    public Map<String, Object> changeMpin(@RequestBody ApiDtos.ChangeMpinRequest request) {
-        return authService.changeMpin(currentUserService.requireCurrentUser(), request);
     }
 
     /**

@@ -46,14 +46,13 @@ public class InvestorOpsController {
 
     /**
      * GET /api/security/summary
-     * Returns security-related status for the current user (2FA, biometric, MPIN, sessions).
+     * Returns security-related status for the current user (2FA, biometric, sessions).
      * Called by Android dashboard.service.ts getSecuritySummary().
      */
     @GetMapping("/api/security/summary")
     public Map<String, Object> getSecuritySummary() {
         var user = currentUserService.requireCurrentUser();
         return Map.of(
-                "mpinConfigured", user.getMpinHash() != null,
                 "biometricEnabled", user.isBiometricEnabled(),
                 "emailVerified", user.isEmailVerified(),
                 "bankVerified", user.isBankVerified(),
