@@ -119,20 +119,17 @@ public class PlatformService {
         if (bankProof != null && !bankProof.isEmpty()) {
             kyc.setBankProofPath(storageService.save(bankProof, "kyc"));
         }
-        // Investor onboarding continues immediately after a successful upload.
-        // The documents are still stored and visible from the investor profile;
-        // no separate admin approval is required to enter the dashboard.
-        kyc.setStatus(DomainEnums.KycStatus.APPROVED);
+        kyc.setStatus(DomainEnums.KycStatus.PENDING);
         kyc.setSubmittedAt(LocalDateTime.now());
         kyc.setReviewedByAdminId(null);
-        kyc.setReviewedAt(LocalDateTime.now());
+        kyc.setReviewedAt(null);
         kyc.setRejectionReason(null);
-        user.setKycStatus(DomainEnums.KycStatus.APPROVED);
+        user.setKycStatus(DomainEnums.KycStatus.PENDING);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         KycSubmission saved = kycSubmissionRepository.save(kyc);
-        notifyUser(user.getId(), "KYC completed", "Your KYC documents were uploaded successfully.", DomainEnums.NotificationType.KYC_UPDATE);
-        auditService.log(user, "KYC_SUBMITTED", "KycSubmission", saved.getId(), null, "APPROVED", request);
+        notifyUser(user.getId(), "KYC Submitted", "Your KYC documents were submitted and are pending admin review.", DomainEnums.NotificationType.KYC_UPDATE);
+        auditService.log(user, "KYC_SUBMITTED", "KycSubmission", saved.getId(), null, "PENDING", request);
         return saved;
     }
 
