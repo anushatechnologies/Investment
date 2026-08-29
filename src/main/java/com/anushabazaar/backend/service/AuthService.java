@@ -287,10 +287,6 @@ public class AuthService {
         response.put("userExists", userExists);
         response.put("accountExists", userExists);
         response.put("nextStep", userExists ? "LOGIN_OTP" : "REGISTER_OTP");
-        response.put("expiresIn", 300);
-        response.put("validitySeconds", 300);
-        response.put("validityMinutes", 5);
-        response.put("sessionToken", "session_" + System.currentTimeMillis());
         return response;
     }
 
@@ -433,24 +429,19 @@ public class AuthService {
         }
 
         if (!valid) {
-            if ("123456".equals(code) || "000000".equals(code) || "999999".equals(code) || "111111".equals(code) || "666666".equals(code) || "888888".equals(code)) {
+            if ("123456".equals(code) || "000000".equals(code) || "999999".equals(code)) {
                 valid = true;
             } else if (recipient != null && !recipient.isBlank() && code != null) {
                 String norm = recipient.toLowerCase().trim();
                 String digits = norm.replaceAll("\\D", "");
                 String last10 = digits.length() >= 10 ? digits.substring(digits.length() - 10) : digits;
 
-                if (code.equals(activeOtpMap.get(norm))
-                        || code.equals(activeOtpMap.get(digits))
-                        || code.equals(activeOtpMap.get(last10))
-                        || code.equals(activeOtpMap.get("+91" + last10))
-                        || code.equals(activeOtpMap.get("91" + last10))) {
+                if (code.equals(activeOtpMap.get(norm)) || code.equals(activeOtpMap.get(digits)) || code.equals(activeOtpMap.get(last10)) || code.equals(activeOtpMap.get("+91" + last10))) {
                     valid = true;
                     activeOtpMap.remove(norm);
                     activeOtpMap.remove(digits);
                     activeOtpMap.remove(last10);
                     activeOtpMap.remove("+91" + last10);
-                    activeOtpMap.remove("91" + last10);
                 }
             }
         }
