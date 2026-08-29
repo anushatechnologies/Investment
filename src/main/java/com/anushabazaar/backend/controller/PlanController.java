@@ -50,6 +50,12 @@ public class PlanController {
         return platformService.deactivatePlan(currentUserService.requireCurrentUser(), id, request);
     }
 
+    @DeleteMapping("/api/admin/plans/{id}")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+    public Object deletePlan(@PathVariable("id") String id, HttpServletRequest request) {
+        return platformService.deletePlan(currentUserService.requireCurrentUser(), id, request);
+    }
+
     @PostMapping("/api/admin/plans/{id}/submit")
     @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     public Object submitPlan(@PathVariable("id") String id, HttpServletRequest request) {

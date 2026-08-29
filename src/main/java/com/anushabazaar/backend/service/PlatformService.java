@@ -335,6 +335,19 @@ public class PlatformService {
     }
 
     @Transactional
+    public Map<String, Object> deletePlan(User admin, String id, HttpServletRequest request) {
+        InvestmentPlan plan = getPlan(id);
+        planRepository.delete(plan);
+        auditService.log(admin, "PLAN_DELETED", "InvestmentPlan", id, null, plan.getPlanName(), request);
+        return Map.of(
+                "status", "DELETED",
+                "message", "Investment plan deleted successfully",
+                "planId", id,
+                "planName", plan.getPlanName() != null ? plan.getPlanName() : ""
+        );
+    }
+
+    @Transactional
     public InvestmentPlan submitPlan(User admin, String id, HttpServletRequest request) {
         InvestmentPlan plan = getPlan(id);
         plan.setPlanStatus(DomainEnums.PlanStatus.APPROVED);
