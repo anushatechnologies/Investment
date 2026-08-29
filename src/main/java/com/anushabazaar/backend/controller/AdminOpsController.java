@@ -75,6 +75,11 @@ public class AdminOpsController {
         return platformService.unblockUser(currentUserService.requireCurrentUser(), id, servletRequest);
     }
 
+    @DeleteMapping("/api/admin/users/{id}")
+    public Object deleteUser(@PathVariable("id") String id, HttpServletRequest servletRequest) {
+        return platformService.deleteUser(currentUserService.requireCurrentUser(), id, servletRequest);
+    }
+
     @GetMapping("/api/admin/fraud-alerts")
     public Object fraudAlerts() {
         return platformService.getFraudAlerts();

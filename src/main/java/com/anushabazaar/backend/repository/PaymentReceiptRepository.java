@@ -11,5 +11,6 @@ public interface PaymentReceiptRepository extends JpaRepository<PaymentReceipt, 
     Optional<PaymentReceipt> findTopByInvestmentIdOrderByUploadedAtDesc(String investmentId);
     Optional<PaymentReceipt> findByInvestmentId(String investmentId);
     Optional<PaymentReceipt> findByReceiptNumber(String receiptNumber);
+    List<PaymentReceipt> findByInvestorId(String investorId);
     List<PaymentReceipt> findByVerificationStatus(DomainEnums.ReceiptStatus verificationStatus);
 }

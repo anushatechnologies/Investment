@@ -1175,6 +1175,55 @@ public class PlatformService {
         return saved;
     }
 
+    @Transactional
+    public Map<String, Object> deleteUser(User admin, String id, HttpServletRequest request) {
+        if (admin.getId().equals(id)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Admins cannot delete their own account");
+        }
+        User targetUser = getUser(id);
+
+        // Delete associated records safely
+        kycSubmissionRepository.findTopByUserIdOrderBySubmittedAtDesc(id).ifPresent(kycSubmissionRepository::delete);
+        bankAccountRepository.findByUserId(id).ifPresent(bankAccountRepository::delete);
+
+        List<PaymentReceipt> receipts = paymentReceiptRepository.findByInvestorId(id);
+        if (!receipts.isEmpty()) paymentReceiptRepository.deleteAll(receipts);
+
+        List<WithdrawalRequest> withdrawals = withdrawalRepository.findByInvestorId(id);
+        if (!withdrawals.isEmpty()) withdrawalRepository.deleteAll(withdrawals);
+
+        List<WalletTransaction> transactions = walletTransactionRepository.findByUserIdOrderByCreatedAtDesc(id);
+        if (!transactions.isEmpty()) walletTransactionRepository.deleteAll(transactions);
+
+        walletRepository.findByUserId(id).ifPresent(walletRepository::delete);
+
+        List<Notification> notifications = notificationRepository.findByUserIdOrderBySentAtDesc(id);
+        if (!notifications.isEmpty()) notificationRepository.deleteAll(notifications);
+
+        List<Investment> investments = investmentRepository.findByInvestorUserId(id);
+        if (!investments.isEmpty()) investmentRepository.deleteAll(investments);
+
+        List<ReferralRelationship> refRel1 = referralRelationshipRepository.findByReferrerUserIdOrderByReferralLevelAscLinkedAtDesc(id);
+        if (!refRel1.isEmpty()) referralRelationshipRepository.deleteAll(refRel1);
+
+        List<ReferralRelationship> refRel2 = referralRelationshipRepository.findByReferredUserIdOrderByReferralLevelAsc(id);
+        if (!refRel2.isEmpty()) referralRelationshipRepository.deleteAll(refRel2);
+
+        List<ReferralCommission> comms = referralCommissionRepository.findByBeneficiaryUserIdOrderByCreditedAtDesc(id);
+        if (!comms.isEmpty()) referralCommissionRepository.deleteAll(comms);
+
+        userRepository.delete(targetUser);
+
+        auditService.log(admin, "USER_DELETED", "User", id, targetUser.getEmail(), "Hard deleted by admin: " + admin.getEmail(), request);
+
+        return Map.of(
+                "status", "DELETED",
+                "message", "User and all associated records deleted successfully",
+                "userId", id,
+                "email", targetUser.getEmail() != null ? targetUser.getEmail() : ""
+        );
+    }
+
     public List<FraudAlert> getFraudAlerts() {
         return fraudAlertRepository.findAllByOrderByCreatedAtDesc();
     }
