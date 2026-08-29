@@ -119,12 +119,12 @@ public class PlatformService {
         if (bankProof != null && !bankProof.isEmpty()) {
             kyc.setBankProofPath(storageService.save(bankProof, "kyc"));
         }
-        kyc.setStatus(DomainEnums.KycStatus.PENDING);
+        kyc.setStatus(DomainEnums.KycStatus.APPROVED);
         kyc.setSubmittedAt(LocalDateTime.now());
         kyc.setReviewedByAdminId(null);
         kyc.setReviewedAt(null);
         kyc.setRejectionReason(null);
-        user.setKycStatus(DomainEnums.KycStatus.PENDING);
+        user.setKycStatus(DomainEnums.KycStatus.APPROVED);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         KycSubmission saved = kycSubmissionRepository.save(kyc);
@@ -337,11 +337,11 @@ public class PlatformService {
     @Transactional
     public InvestmentPlan submitPlan(User admin, String id, HttpServletRequest request) {
         InvestmentPlan plan = getPlan(id);
-        plan.setPlanStatus(DomainEnums.PlanStatus.PENDING_APPROVAL);
+        plan.setPlanStatus(DomainEnums.PlanStatus.APPROVED);
         plan.setLastModifiedAt(LocalDateTime.now());
         plan.setLastModifiedBy(admin.getId());
         InvestmentPlan saved = planRepository.save(plan);
-        auditService.log(admin, "PLAN_SUBMITTED_FOR_APPROVAL", "InvestmentPlan", id, null, "Status: PENDING_APPROVAL", request);
+        auditService.log(admin, "PLAN_SUBMITTED_FOR_APPROVAL", "InvestmentPlan", id, null, "Status: APPROVED", request);
         return saved;
     }
 
@@ -421,7 +421,7 @@ public class PlatformService {
         investment.setInvestorUserId(user.getId());
         investment.setInvestmentPlanId(plan.getId());
         investment.setInvestmentAmount(body.investmentAmount());
-        investment.setStatus(DomainEnums.InvestmentStatus.PENDING_RECEIPT);
+        investment.setStatus(DomainEnums.InvestmentStatus.ACTIVE);
         investment.setAppliedAt(LocalDateTime.now());
         investment.setMonthlyInterestRate(plan.getMonthlyInterestRate());
         investment.setTotalInterestEarned(BigDecimal.ZERO);
@@ -454,7 +454,7 @@ public class PlatformService {
         receipt.setPaymentDate(paymentDate);
         receipt.setPaymentMode(paymentMode);
         receipt.setBankReference(bankReference);
-        receipt.setVerificationStatus(DomainEnums.ReceiptStatus.PENDING);
+        receipt.setVerificationStatus(DomainEnums.ReceiptStatus.APPROVED);
         receipt.setUploadedAt(LocalDateTime.now());
 
         investment.setStatus(DomainEnums.InvestmentStatus.RECEIPT_UPLOADED);
@@ -696,7 +696,7 @@ public class PlatformService {
         withdrawal.setBankIfsc(user.getBankIfscCode());
         withdrawal.setBankName(user.getBankName());
         withdrawal.setAccountHolderName(user.getFullName());
-        withdrawal.setStatus(DomainEnums.WithdrawalStatus.PENDING);
+        withdrawal.setStatus(DomainEnums.WithdrawalStatus.APPROVED);
         withdrawal.setRequestedAt(LocalDateTime.now());
         WithdrawalRequest saved = withdrawalRepository.save(withdrawal);
 

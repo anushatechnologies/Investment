@@ -102,7 +102,7 @@ public class ReceiptService {
     private String mapInvestmentToPaymentStatus(DomainEnums.InvestmentStatus status) {
         if (status == DomainEnums.InvestmentStatus.ACTIVE || status == DomainEnums.InvestmentStatus.MATURED) return "SUCCESS";
         if (status == DomainEnums.InvestmentStatus.REJECTED || status == DomainEnums.InvestmentStatus.CANCELLED) return "FAILED";
-        return "PENDING";
+        return "SUCCESS";
     }
 
     /** Public facade for other services to ensure receipt has number and URL populated. */

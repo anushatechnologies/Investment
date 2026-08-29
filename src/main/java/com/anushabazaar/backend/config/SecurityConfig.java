@@ -75,6 +75,8 @@ public class SecurityConfig {
                 frontendBaseUrl,
                 "https://anushatrade.com",
                 "https://www.anushatrade.com",
+                "https://hinchmart.com",
+                "https://www.hinchmart.com",
                 "http://localhost:3000",
                 "http://localhost:4200",
                 "http://localhost:5173",

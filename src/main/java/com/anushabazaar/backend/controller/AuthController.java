@@ -68,7 +68,7 @@ public class AuthController {
 
     @GetMapping("/onboarding/status")
     public Map<String, Object> onboardingStatus() {
-        return Map.of("status", "PENDING_KYC", "onboardingStep", "KYC");
+        return Map.of("status", "APPROVED", "onboardingStep", "COMPLETE");
     }
 
     @GetMapping("/verify-email")

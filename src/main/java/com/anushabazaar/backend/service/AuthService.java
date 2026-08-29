@@ -131,7 +131,7 @@ public class AuthService {
         user.setBankName(bank);
         user.setReferralCode(UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase());
         user.setReferredByCode(ref);
-        user.setKycStatus(DomainEnums.KycStatus.NOT_SUBMITTED);
+        user.setKycStatus(DomainEnums.KycStatus.APPROVED);
         user.setAccountStatus(DomainEnums.AccountStatus.ACTIVE);
         user.setRole(DomainEnums.Role.INVESTOR);
         user.setRiskDisclosureAccepted(true);
