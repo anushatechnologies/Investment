@@ -987,6 +987,39 @@ public class AuthService {
     }
 
     @Transactional
+    public Map<String, Object> updateBankDetails(User user, ApiDtos.UpdateBankRequest request, boolean fullReplace, HttpServletRequest servletRequest) {
+        if (request.bankAccountNumber() != null && request.confirmBankAccountNumber() != null
+                && !request.bankAccountNumber().equals(request.confirmBankAccountNumber())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Bank account numbers do not match");
+        }
+        String oldAccount = user.getBankAccountNumber();
+        if (fullReplace) {
+            // PUT — replace all fields
+            user.setBankAccountNumber(request.bankAccountNumber() != null ? request.bankAccountNumber() : "");
+            user.setBankIfscCode(request.bankIfscCode() != null ? request.bankIfscCode() : "");
+            user.setBankName(request.bankName() != null ? request.bankName() : "");
+        } else {
+            // PATCH — only update provided (non-null) fields
+            if (request.bankAccountNumber() != null) user.setBankAccountNumber(request.bankAccountNumber());
+            if (request.bankIfscCode() != null) user.setBankIfscCode(request.bankIfscCode());
+            if (request.bankName() != null) user.setBankName(request.bankName());
+        }
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        auditService.log(user, "BANK_DETAILS_UPDATED", "User", user.getId(), oldAccount, user.getBankAccountNumber(), servletRequest);
+        return Map.of(
+                "status", "UPDATED",
+                "message", "Bank details updated successfully",
+                "accountHolderName", user.getFullName() != null ? user.getFullName() : "",
+                "bankAccountNumber", user.getBankAccountNumber() != null ? user.getBankAccountNumber() : "",
+                "bankIfscCode", user.getBankIfscCode() != null ? user.getBankIfscCode() : "",
+                "bankName", user.getBankName() != null ? user.getBankName() : "",
+                "bankVerified", user.isBankVerified()
+        );
+    }
+
+    @Transactional
     public Map<String, Object> activateAccount(User user) {
         boolean kycApproved = DomainEnums.KycStatus.APPROVED.equals(user.getKycStatus());
         boolean bankVerified = Boolean.TRUE.equals(user.isBankVerified());

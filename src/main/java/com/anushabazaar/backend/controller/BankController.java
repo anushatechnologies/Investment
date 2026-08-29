@@ -7,7 +7,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,7 +18,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/bank")
-@PreAuthorize("hasRole('INVESTOR')")
 public class BankController {
 
     private final AuthService authService;
@@ -50,5 +51,17 @@ public class BankController {
                 "bankVerified", user.isBankVerified(),
                 "bankVerifiedAt", user.getBankVerifiedAt() == null ? "" : user.getBankVerifiedAt()
         );
+    }
+
+    @PutMapping("/update")
+    public Map<String, Object> updateBank(@RequestBody ApiDtos.UpdateBankRequest request,
+                                          HttpServletRequest servletRequest) {
+        return authService.updateBankDetails(currentUserService.requireCurrentUser(), request, true, servletRequest);
+    }
+
+    @PatchMapping("/update")
+    public Map<String, Object> patchBank(@RequestBody ApiDtos.UpdateBankRequest request,
+                                         HttpServletRequest servletRequest) {
+        return authService.updateBankDetails(currentUserService.requireCurrentUser(), request, false, servletRequest);
     }
 }

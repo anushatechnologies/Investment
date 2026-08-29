@@ -261,6 +261,15 @@ public final class ApiDtos {
     ) {
     }
 
+    public record UpdateBankRequest(
+            String bankAccountNumber,
+            String confirmBankAccountNumber,
+            String bankIfscCode,
+            String bankName,
+            String accountHolderName
+    ) {
+    }
+
     public record ReceiptStatusResponse(
             String paymentStatus,
             String investmentId,
