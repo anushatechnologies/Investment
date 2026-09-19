@@ -87,4 +87,10 @@ class StorageServiceTest {
         );
         assertThat(storageService).isNotNull();
     }
+
+    @Test
+    void defaultConstructorInstantiatesSuccessfully() throws IOException {
+        StorageService storageService = new StorageService();
+        assertThat(storageService).isNotNull();
+    }
 }

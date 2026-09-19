@@ -45,6 +45,10 @@ public class StorageService {
     private final boolean fallbackToLocal;
     private final S3Client s3Client;
 
+    public StorageService() throws IOException {
+        this("uploads", "local", null, null, "ap-south-1", null, null, true);
+    }
+
     public StorageService(String root,
                           String storageMode,
                           String s3AccessKey,
