@@ -8,13 +8,18 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
+
+  # ============================================================
+  # 1. BUILD AND TEST
+  # ============================================================
   test:
     name: Build And Test
     runs-on: ubuntu-latest
+
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -37,111 +42,200 @@ jobs:
           name: backend-jar
           path: target/backend-0.0.1-SNAPSHOT.jar
 
+
+  # ============================================================
+  # 2. BUILD DOCKER IMAGE + PUSH TO ECR + DEPLOY TO EC2
+  # ============================================================
   deploy:
     name: Push To ECR And Deploy EC2
     runs-on: ubuntu-latest
     needs: test
     environment: production
+
     env:
-      AWS_REGION: ${{ vars.AWS_REGION || secrets.AWS_REGION || 'ap-south-2' }}
-      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || secrets.ECR_REPOSITORY || 'anushabazaar-backend' }}
-      EC2_HOST: ${{ vars.EC2_HOST || secrets.EC2_HOST }}
-      EC2_USER: ${{ vars.EC2_USER || secrets.EC2_USER || 'ec2-user' }}
-      APP_PORT: ${{ vars.APP_PORT || secrets.APP_PORT || vars.CONTAINER_PORT || secrets.CONTAINER_PORT || '8080' }}
-      SPRING_DATASOURCE_URL: ${{ secrets.SPRING_DATASOURCE_URL || 'jdbc:mysql://investment-db.cze8cqsmy2le.ap-south-2.rds.amazonaws.com:3306/investment_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC' }}
-      SPRING_DATASOURCE_USERNAME: ${{ secrets.SPRING_DATASOURCE_USERNAME || 'venkat' }}
-      SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD || 'Admin12345' }}
-      APP_FILE_STORAGE_PROVIDER: ${{ vars.APP_FILE_STORAGE_PROVIDER || secrets.APP_FILE_STORAGE_PROVIDER || (secrets.APP_FILE_STORAGE_S3_BUCKET && 's3') || (secrets.AWS_S3_BUCKET && 's3') || 's3' }}
-      APP_FILE_STORAGE_MODE: ${{ vars.APP_FILE_STORAGE_MODE || secrets.APP_FILE_STORAGE_MODE || vars.APP_FILE_STORAGE_PROVIDER || secrets.APP_FILE_STORAGE_PROVIDER || (secrets.APP_FILE_STORAGE_S3_BUCKET && 's3') || (secrets.AWS_S3_BUCKET && 's3') || 's3' }}
-      APP_FILE_STORAGE_S3_REGION: ${{ vars.APP_FILE_STORAGE_S3_REGION || secrets.APP_FILE_STORAGE_S3_REGION || vars.AWS_REGION || secrets.AWS_REGION || 'ap-south-2' }}
-      APP_FILE_STORAGE_S3_PREFIX: ${{ vars.APP_FILE_STORAGE_S3_PREFIX || secrets.APP_FILE_STORAGE_S3_PREFIX || 'anushabazaar' }}
-      APP_FILE_STORAGE_S3_PUBLIC_BASE_URL: ${{ vars.APP_FILE_STORAGE_S3_PUBLIC_BASE_URL || secrets.APP_FILE_STORAGE_S3_PUBLIC_BASE_URL }}
-      APP_EMAIL_ENABLED: ${{ vars.APP_EMAIL_ENABLED || secrets.APP_EMAIL_ENABLED || 'false' }}
-      APP_EMAIL_EXPOSE_GENERATED_VALUES: ${{ vars.APP_EMAIL_EXPOSE_GENERATED_VALUES || secrets.APP_EMAIL_EXPOSE_GENERATED_VALUES || 'false' }}
-      APP_EMAIL_INVOICE_BASE_URL: ${{ vars.APP_EMAIL_INVOICE_BASE_URL || secrets.APP_EMAIL_INVOICE_BASE_URL }}
-      APP_EMAIL_LOGO_URL: ${{ vars.APP_EMAIL_LOGO_URL || secrets.APP_EMAIL_LOGO_URL || 'https://anusha.trade/assets/brand-logo.png' }}
-      APP_FRONTEND_BASE_URL: ${{ vars.APP_FRONTEND_BASE_URL || secrets.APP_FRONTEND_BASE_URL || 'http://localhost:3000' }}
-      APP_SEED_DEFAULT_ADMINS: ${{ vars.APP_SEED_DEFAULT_ADMINS || secrets.APP_SEED_DEFAULT_ADMINS || 'false' }}
-      APP_ADMIN_FULL_NAME: ${{ vars.APP_ADMIN_FULL_NAME || secrets.APP_ADMIN_FULL_NAME || 'ADMIN' }}
-      APP_RAZORPAY_ENABLED: ${{ vars.APP_RAZORPAY_ENABLED || secrets.APP_RAZORPAY_ENABLED || 'true' }}
-      APP_RAZORPAY_CURRENCY: ${{ vars.APP_RAZORPAY_CURRENCY || secrets.APP_RAZORPAY_CURRENCY || 'INR' }}
-      APP_RAZORPAY_AUTO_CAPTURE: ${{ vars.APP_RAZORPAY_AUTO_CAPTURE || secrets.APP_RAZORPAY_AUTO_CAPTURE || 'true' }}
-      APP_RAZORPAY_API_BASE_URL: ${{ vars.APP_RAZORPAY_API_BASE_URL || secrets.APP_RAZORPAY_API_BASE_URL || 'https://api.razorpay.com/v1' }}
-      SPRING_MAIL_HOST: ${{ vars.SPRING_MAIL_HOST || secrets.SPRING_MAIL_HOST || 'smtpout.secureserver.net' }}
-      SPRING_MAIL_PORT: ${{ vars.SPRING_MAIL_PORT || secrets.SPRING_MAIL_PORT || '587' }}
+      AWS_REGION: ${{ secrets.AWS_REGION || 'ap-south-1' }}
+      ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY || 'anushatrade' }}
+      EC2_HOST: ${{ secrets.EC2_HOST || '13.203.204.190' }}
+      EC2_USER: ${{ secrets.EC2_USER || 'ec2-user' }}
+      APP_PORT: ${{ secrets.CONTAINER_PORT || '8080' }}
+
+      # --------------------------------------------------------
+      # Supabase PostgreSQL
+      # --------------------------------------------------------
+      SPRING_DATASOURCE_URL: ${{ secrets.SPRING_DATASOURCE_URL }}
+      SPRING_DATASOURCE_USERNAME: ${{ secrets.SPRING_DATASOURCE_USERNAME }}
+      SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD }}
+
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.PostgreSQLDialect
+
+      # --------------------------------------------------------
+      # Supabase Storage
+      # --------------------------------------------------------
+      APP_FILE_STORAGE_S3_ENDPOINT: ${{ secrets.APP_FILE_STORAGE_S3_ENDPOINT }}
+      APP_FILE_STORAGE_PROVIDER: ${{ secrets.APP_FILE_STORAGE_PROVIDER || 's3' }}
+      APP_FILE_STORAGE_MODE: ${{ secrets.APP_FILE_STORAGE_PROVIDER || 's3' }}
+      APP_FILE_STORAGE_S3_REGION: ${{ secrets.APP_FILE_STORAGE_S3_REGION || 'ap-south-1' }}
+      APP_FILE_STORAGE_S3_PREFIX: ${{ secrets.APP_FILE_STORAGE_S3_PREFIX || 'anushatrade' }}
+      APP_FILE_STORAGE_S3_PUBLIC_BASE_URL: ${{ secrets.APP_FILE_STORAGE_S3_PUBLIC_BASE_URL }}
+
+      # --------------------------------------------------------
+      # Email
+      # --------------------------------------------------------
+      APP_EMAIL_ENABLED: ${{ secrets.APP_EMAIL_ENABLED || 'false' }}
+      APP_EMAIL_EXPOSE_GENERATED_VALUES: ${{ secrets.APP_EMAIL_EXPOSE_GENERATED_VALUES || 'false' }}
+      APP_EMAIL_INVOICE_BASE_URL: ${{ secrets.APP_EMAIL_INVOICE_BASE_URL }}
+      APP_EMAIL_LOGO_URL: ${{ secrets.APP_EMAIL_LOGO_URL || 'https://anusha.trade/assets/brand-logo.png' }}
+      APP_FRONTEND_BASE_URL: ${{ secrets.APP_FRONTEND_BASE_URL || 'http://localhost:3000' }}
+
+      # --------------------------------------------------------
+      # Admin
+      # --------------------------------------------------------
+      APP_SEED_DEFAULT_ADMINS: ${{ secrets.APP_SEED_DEFAULT_ADMINS || 'false' }}
+      APP_ADMIN_FULL_NAME: ${{ secrets.APP_ADMIN_FULL_NAME || 'ADMIN' }}
+
+      # --------------------------------------------------------
+      # Razorpay
+      # --------------------------------------------------------
+      APP_RAZORPAY_ENABLED: ${{ secrets.APP_RAZORPAY_ENABLED || 'true' }}
+      APP_RAZORPAY_CURRENCY: ${{ secrets.APP_RAZORPAY_CURRENCY || 'INR' }}
+      APP_RAZORPAY_AUTO_CAPTURE: ${{ secrets.APP_RAZORPAY_AUTO_CAPTURE || 'true' }}
+      APP_RAZORPAY_API_BASE_URL: ${{ secrets.APP_RAZORPAY_API_BASE_URL || 'https://api.razorpay.com/v1' }}
+
+      # --------------------------------------------------------
+      # Mail
+      # --------------------------------------------------------
+      SPRING_MAIL_HOST: ${{ secrets.SPRING_MAIL_HOST || 'smtpout.secureserver.net' }}
+      SPRING_MAIL_PORT: ${{ secrets.SPRING_MAIL_PORT || '587' }}
+
     steps:
+
+      # ========================================================
+      # CHECKOUT
+      # ========================================================
       - name: Checkout
         uses: actions/checkout@v4
 
+
+      # ========================================================
+      # DOWNLOAD JAR
+      # ========================================================
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: backend-jar
           path: target
 
+
+      # ========================================================
+      # AWS CREDENTIALS
+      #
+      # Simple setup:
+      # IAM User -> Access Key -> GitHub Secrets -> ECR
+      # ========================================================
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+
+      # ========================================================
+      # LOGIN TO ECR
+      # ========================================================
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+
+      # ========================================================
+      # BUILD AND PUSH DOCKER IMAGE
+      # ========================================================
       - name: Build and push Docker image
         id: image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
+          set -e
+
           for i in 1 2 3; do
-            docker build --pull -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" . && break || sleep 5
+            docker build --pull \
+              -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" . && break || sleep 5
           done
-          docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+          docker tag \
+            "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+            "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
+          docker push \
+            "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+          docker push \
+            "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
           echo "registry=$ECR_REGISTRY" >> "$GITHUB_OUTPUT"
 
+
+      # ========================================================
+      # CONFIGURE SSH
+      # ========================================================
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/ec2_key
+
+          printf '%s\n' "${{ secrets.EC2_SSH_PRIVATE_KEY }}" \
+            > ~/.ssh/ec2_key
+
           chmod 600 ~/.ssh/ec2_key
+
           ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
 
+
+      # ========================================================
+      # CREATE RUNTIME ENV FILE
+      # ========================================================
       - name: Create runtime env file
         env:
           SPRING_DATASOURCE_URL: ${{ env.SPRING_DATASOURCE_URL }}
           SPRING_DATASOURCE_USERNAME: ${{ env.SPRING_DATASOURCE_USERNAME }}
-          SPRING_DATASOURCE_PASSWORD: ${{ secrets.SPRING_DATASOURCE_PASSWORD || 'Admin12345' }}
+          SPRING_DATASOURCE_PASSWORD: ${{ env.SPRING_DATASOURCE_PASSWORD }}
+          SPRING_JPA_DATABASE_PLATFORM: ${{ env.SPRING_JPA_DATABASE_PLATFORM }}
+
           APP_JWT_SECRET: ${{ secrets.APP_JWT_SECRET }}
-          APP_FIREBASE_PROJECT_ID: ${{ secrets.APP_FIREBASE_PROJECT_ID || 'anushabazaar-2288e' }}
+
+          APP_FIREBASE_PROJECT_ID: ${{ secrets.APP_FIREBASE_PROJECT_ID }}
           RAW_FIREBASE_BASE64: ${{ secrets.APP_FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+
           APP_FILE_STORAGE_PROVIDER: ${{ env.APP_FILE_STORAGE_PROVIDER }}
           APP_FILE_STORAGE_MODE: ${{ env.APP_FILE_STORAGE_MODE }}
-          APP_FILE_STORAGE_S3_ACCESS_KEY: ${{ secrets.APP_FILE_STORAGE_S3_ACCESS_KEY || secrets.AWS_ACCESS_KEY_ID }}
-          APP_FILE_STORAGE_S3_SECRET_KEY: ${{ secrets.APP_FILE_STORAGE_S3_SECRET_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
-          APP_FILE_STORAGE_S3_BUCKET: ${{ secrets.APP_FILE_STORAGE_S3_BUCKET || secrets.AWS_S3_BUCKET || secrets.S3_BUCKET }}
+          APP_FILE_STORAGE_S3_ENDPOINT: ${{ env.APP_FILE_STORAGE_S3_ENDPOINT }}
+
+          APP_FILE_STORAGE_S3_ACCESS_KEY: ${{ secrets.APP_FILE_STORAGE_S3_ACCESS_KEY }}
+          APP_FILE_STORAGE_S3_SECRET_KEY: ${{ secrets.APP_FILE_STORAGE_S3_SECRET_KEY }}
+          APP_FILE_STORAGE_S3_BUCKET: ${{ secrets.APP_FILE_STORAGE_S3_BUCKET }}
           APP_FILE_STORAGE_S3_REGION: ${{ env.APP_FILE_STORAGE_S3_REGION }}
           APP_FILE_STORAGE_S3_PREFIX: ${{ env.APP_FILE_STORAGE_S3_PREFIX }}
           APP_FILE_STORAGE_S3_PUBLIC_BASE_URL: ${{ env.APP_FILE_STORAGE_S3_PUBLIC_BASE_URL }}
-          APP_FILE_STORAGE_FALLBACK_TO_LOCAL: "true"
+
           APP_EMAIL_ENABLED: ${{ env.APP_EMAIL_ENABLED }}
           APP_EMAIL_EXPOSE_GENERATED_VALUES: ${{ env.APP_EMAIL_EXPOSE_GENERATED_VALUES }}
           APP_EMAIL_INVOICE_BASE_URL: ${{ env.APP_EMAIL_INVOICE_BASE_URL }}
           APP_EMAIL_LOGO_URL: ${{ env.APP_EMAIL_LOGO_URL }}
           APP_FRONTEND_BASE_URL: ${{ env.APP_FRONTEND_BASE_URL }}
+
           SPRING_MAIL_HOST: ${{ env.SPRING_MAIL_HOST }}
           SPRING_MAIL_PORT: ${{ env.SPRING_MAIL_PORT }}
           SPRING_MAIL_USERNAME: ${{ secrets.SPRING_MAIL_USERNAME }}
           SPRING_MAIL_PASSWORD: ${{ secrets.SPRING_MAIL_PASSWORD }}
           APP_EMAIL_FROM: ${{ secrets.APP_EMAIL_FROM }}
+
           APP_SEED_DEFAULT_ADMINS: ${{ env.APP_SEED_DEFAULT_ADMINS }}
           APP_ADMIN_EMAIL: ${{ secrets.APP_ADMIN_EMAIL }}
           APP_ADMIN_PASSWORD: ${{ secrets.APP_ADMIN_PASSWORD }}
           APP_ADMIN_FULL_NAME: ${{ env.APP_ADMIN_FULL_NAME }}
+
           APP_RAZORPAY_ENABLED: ${{ env.APP_RAZORPAY_ENABLED }}
           APP_RAZORPAY_KEY_ID: ${{ secrets.APP_RAZORPAY_KEY_ID }}
           APP_RAZORPAY_KEY_SECRET: ${{ secrets.APP_RAZORPAY_KEY_SECRET }}
@@ -149,19 +243,24 @@ jobs:
           APP_RAZORPAY_CURRENCY: ${{ env.APP_RAZORPAY_CURRENCY }}
           APP_RAZORPAY_AUTO_CAPTURE: ${{ env.APP_RAZORPAY_AUTO_CAPTURE }}
           APP_RAZORPAY_API_BASE_URL: ${{ env.APP_RAZORPAY_API_BASE_URL }}
+
           META_PHONE_NUMBER_ID: ${{ secrets.META_PHONE_NUMBER_ID }}
           META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
           META_WEBHOOK_VERIFY_TOKEN: ${{ secrets.META_WEBHOOK_VERIFY_TOKEN }}
           META_TEMPLATE_NAME: ${{ secrets.META_TEMPLATE_NAME }}
-          META_WHATSAPP_ENABLED: ${{ vars.META_WHATSAPP_ENABLED || secrets.META_WHATSAPP_ENABLED || 'true' }}
+          META_WHATSAPP_ENABLED: ${{ secrets.META_WHATSAPP_ENABLED || 'true' }}
+
         run: |
+          set -e
+
           CLEAN_FIREBASE_BASE64=$(echo "$RAW_FIREBASE_BASE64" | tr -d '\r\n\t ')
-          # Write env file using printf to avoid heredoc indentation issues
+
           printf '%s\n' \
             "SPRING_PROFILES_ACTIVE=prod" \
             "SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}" \
             "SPRING_DATASOURCE_USERNAME=${SPRING_DATASOURCE_USERNAME}" \
             "SPRING_DATASOURCE_PASSWORD=${SPRING_DATASOURCE_PASSWORD}" \
+            "SPRING_JPA_DATABASE_PLATFORM=${SPRING_JPA_DATABASE_PLATFORM}" \
             "SPRING_JPA_HIBERNATE_DDL_AUTO=update" \
             "APP_JWT_SECRET=${APP_JWT_SECRET}" \
             "APP_FIREBASE_PROJECT_ID=${APP_FIREBASE_PROJECT_ID}" \
@@ -169,6 +268,7 @@ jobs:
             "APP_FILE_STORAGE_PROVIDER=${APP_FILE_STORAGE_PROVIDER}" \
             "APP_FILE_STORAGE_MODE=${APP_FILE_STORAGE_MODE}" \
             "APP_FILE_STORAGE_ROOT=/app/uploads" \
+            "APP_FILE_STORAGE_S3_ENDPOINT=${APP_FILE_STORAGE_S3_ENDPOINT}" \
             "APP_FILE_STORAGE_S3_ACCESS_KEY=${APP_FILE_STORAGE_S3_ACCESS_KEY}" \
             "APP_FILE_STORAGE_S3_SECRET_KEY=${APP_FILE_STORAGE_S3_SECRET_KEY}" \
             "APP_FILE_STORAGE_S3_BUCKET=${APP_FILE_STORAGE_S3_BUCKET}" \
@@ -203,22 +303,58 @@ jobs:
             "META_TEMPLATE_NAME=${META_TEMPLATE_NAME}" \
             "META_WHATSAPP_ENABLED=${META_WHATSAPP_ENABLED}" \
             > runtime.env
-          echo "=== runtime.env check ==="
-          grep "SPRING_DATASOURCE_URL" runtime.env | sed 's/=.*/=**HIDDEN**/'
+
+          echo "Runtime environment file created."
 
 
+      # ========================================================
+      # COPY ENV FILE TO EC2
+      # ========================================================
       - name: Copy runtime env file to EC2
         run: |
-          ssh -i ~/.ssh/ec2_key "$EC2_USER@$EC2_HOST" "mkdir -p ~/investment-backend"
-          scp -i ~/.ssh/ec2_key runtime.env "$EC2_USER@$EC2_HOST:~/investment-backend/.env"
+          ssh -i ~/.ssh/ec2_key \
+            "$EC2_USER@$EC2_HOST" \
+            "mkdir -p ~/investment-backend"
 
+          scp -i ~/.ssh/ec2_key \
+            runtime.env \
+            "$EC2_USER@$EC2_HOST:~/investment-backend/.env"
+
+
+      # ========================================================
+      # LOGIN EC2 TO ECR
+      #
+      # We DON'T put AWS keys on EC2.
+      # GitHub gets a temporary ECR password and sends it
+      # securely to Docker on EC2.
+      # ========================================================
+      - name: Login EC2 Docker to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.image.outputs.registry }}
+        run: |
+          set -e
+
+          ECR_PASSWORD=$(aws ecr get-login-password --region "$AWS_REGION")
+
+          printf '%s' "$ECR_PASSWORD" | \
+            ssh -i ~/.ssh/ec2_key \
+            "$EC2_USER@$EC2_HOST" \
+            "docker login --username AWS --password-stdin '$ECR_REGISTRY'"
+
+
+      # ========================================================
+      # DEPLOY DOCKER CONTAINER
+      # ========================================================
       - name: Deploy Docker container on EC2
         env:
           IMAGE_URI: ${{ steps.image.outputs.image }}
-          ECR_REGISTRY: ${{ steps.image.outputs.registry }}
         run: |
-          ssh -i ~/.ssh/ec2_key "$EC2_USER@$EC2_HOST" \
-            "AWS_REGION='$AWS_REGION' ECR_REGISTRY='$ECR_REGISTRY' IMAGE_URI='$IMAGE_URI' APP_PORT='$APP_PORT' bash -s" <<'EOF'
+          set -e
+
+          ssh -i ~/.ssh/ec2_key \
+            "$EC2_USER@$EC2_HOST" \
+            "IMAGE_URI='$IMAGE_URI' APP_PORT='$APP_PORT' bash -s" <<'EOF'
+
           set -euo pipefail
 
           APP_DIR="$HOME/investment-backend"
@@ -227,12 +363,16 @@ jobs:
           mkdir -p "$APP_DIR"
           chmod 600 "$APP_DIR/.env"
 
-          aws ecr get-login-password --region "$AWS_REGION" \
-            | docker login --username AWS --password-stdin "$ECR_REGISTRY"
-
+          echo "Pulling Docker image..."
           docker pull "$IMAGE_URI"
+
+          echo "Stopping old container..."
           docker stop "$CONTAINER_NAME" || true
+
+          echo "Removing old container..."
           docker rm "$CONTAINER_NAME" || true
+
+          echo "Starting new container..."
 
           docker run -d \
             --name "$CONTAINER_NAME" \
@@ -242,32 +382,58 @@ jobs:
             -v investment_uploads:/app/uploads \
             "$IMAGE_URI"
 
+          echo "Cleaning unused Docker images..."
           docker image prune -af
+
+          echo "Container status:"
           docker ps --filter "name=$CONTAINER_NAME"
+
           EOF
 
+
+      # ========================================================
+      # HEALTH CHECK
+      # ========================================================
       - name: Verify deployment health
         run: |
-          echo "Waiting for app to complete startup..."
+          echo "Waiting for application startup..."
+
           SUCCESS=0
+
           for i in {1..15}; do
+
             echo "Health check attempt $i of 15..."
-            HTTP_CODE=$(ssh -i ~/.ssh/ec2_key "$EC2_USER@$EC2_HOST" "curl -s -o /dev/null -w '%{http_code}' http://localhost:$APP_PORT/actuator/health --max-time 5 || echo 000")
+
+            HTTP_CODE=$(ssh -i ~/.ssh/ec2_key \
+              "$EC2_USER@$EC2_HOST" \
+              "curl -s -o /dev/null -w '%{http_code}' http://localhost:$APP_PORT/actuator/health --max-time 5 || echo 000")
+
             echo "Attempt $i returned HTTP $HTTP_CODE"
+
             if [ "$HTTP_CODE" = "200" ]; then
               SUCCESS=1
               break
             fi
+
             sleep 5
+
           done
 
           echo "=== Docker container status ==="
-          ssh -i ~/.ssh/ec2_key "$EC2_USER@$EC2_HOST" "docker ps -a --filter name=investment-backend"
-          echo "=== Last 50 lines of app logs ==="
-          ssh -i ~/.ssh/ec2_key "$EC2_USER@$EC2_HOST" "docker logs investment-backend --tail 50 2>&1 || echo 'No logs'"
+
+          ssh -i ~/.ssh/ec2_key \
+            "$EC2_USER@$EC2_HOST" \
+            "docker ps -a --filter name=investment-backend"
+
+          echo "=== Last 50 lines of application logs ==="
+
+          ssh -i ~/.ssh/ec2_key \
+            "$EC2_USER@$EC2_HOST" \
+            "docker logs investment-backend --tail 50 2>&1 || echo 'No logs'"
 
           if [ "$SUCCESS" -ne 1 ]; then
-            echo "ERROR: App health check failed."
+            echo "ERROR: Application health check failed."
             exit 1
           fi
-          echo "App is healthy and running!"
+
+          echo "Application is healthy and running!"

@@ -23,6 +23,7 @@ import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -35,6 +36,7 @@ public class StorageService {
 
     private final Path storageRoot;
     private final String storageMode;
+    private final String s3Endpoint;
     private final String s3AccessKey;
     private final String s3Region;
     private final String s3Bucket;
@@ -42,19 +44,31 @@ public class StorageService {
     private final boolean fallbackToLocal;
     private final S3Client s3Client;
 
+    public StorageService(String root,
+                          String storageMode,
+                          String s3AccessKey,
+                          String s3Region,
+                          String s3Bucket,
+                          String s3SecretKey,
+                          boolean fallbackToLocal) throws IOException {
+        this(root, storageMode, null, s3AccessKey, s3Region, s3Bucket, s3SecretKey, fallbackToLocal);
+    }
+
     public StorageService(
             @Value("${app.file-storage.local-root:uploads}") String root,
             @Value("${app.file-storage.mode:local}") String storageMode,
+            @Value("${app.file-storage.s3-endpoint:}") String s3Endpoint,
             @Value("${app.file-storage.s3-access-key:}") String s3AccessKey,
-            @Value("${app.file-storage.s3-region:ap-south-2}") String s3Region,
+            @Value("${app.file-storage.s3-region:ap-south-1}") String s3Region,
             @Value("${app.file-storage.s3-bucket:}") String s3Bucket,
             @Value("${app.file-storage.s3-secret-key:}") String s3SecretKey,
             @Value("${app.file-storage.fallback-to-local:true}") boolean fallbackToLocal
     ) throws IOException {
         this.storageRoot = Path.of(root);
         this.storageMode = storageMode;
+        this.s3Endpoint = s3Endpoint;
         this.s3AccessKey = s3AccessKey;
-        this.s3Region = (s3Region == null || s3Region.isBlank()) ? "ap-south-2" : s3Region;
+        this.s3Region = (s3Region == null || s3Region.isBlank()) ? "ap-south-1" : s3Region;
         this.s3Bucket = s3Bucket;
         this.s3SecretKey = s3SecretKey;
         this.fallbackToLocal = fallbackToLocal;
@@ -155,10 +169,17 @@ public class StorageService {
             credentialsProvider = DefaultCredentialsProvider.create();
         }
 
-        return S3Client.builder()
+        var builder = S3Client.builder()
                 .region(software.amazon.awssdk.regions.Region.of(s3Region.trim()))
-                .credentialsProvider(credentialsProvider)
-                .build();
+                .credentialsProvider(credentialsProvider);
+
+        if (s3Endpoint != null && !s3Endpoint.isBlank()) {
+            log.info("Configuring S3 client with custom endpoint: {}", s3Endpoint.trim());
+            builder.endpointOverride(URI.create(s3Endpoint.trim()))
+                    .forcePathStyle(true);
+        }
+
+        return builder.build();
     }
 
     private String sanitizeFilename(String filename) {

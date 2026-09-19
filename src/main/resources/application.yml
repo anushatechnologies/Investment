@@ -4,19 +4,22 @@ spring:
   main:
     banner-mode: off
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/anushabazaar?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Kolkata}
-    username: ${SPRING_DATASOURCE_USERNAME:root}
-    password: ${SPRING_DATASOURCE_PASSWORD:2395}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:}
   jpa:
-    database-platform: org.hibernate.dialect.MySQLDialect
+    database-platform: ${SPRING_JPA_DATABASE_PLATFORM:org.hibernate.dialect.PostgreSQLDialect}
     hibernate:
       ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
     show-sql: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
+        dialect: ${SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT:org.hibernate.dialect.PostgreSQLDialect}
         format_sql: true
+        jdbc:
+          lob:
+            non_contextual_creation: true
   servlet:
     multipart:
       max-file-size: 10MB
@@ -64,8 +67,9 @@ app:
   file-storage:
     root: ${APP_FILE_STORAGE_ROOT:uploads}
     mode: ${APP_FILE_STORAGE_MODE:${APP_FILE_STORAGE_PROVIDER:s3}}
+    s3-endpoint: ${APP_FILE_STORAGE_S3_ENDPOINT:${SUPABASE_STORAGE_S3_ENDPOINT:}}
     s3-access-key: ${APP_FILE_STORAGE_S3_ACCESS_KEY:${AWS_ACCESS_KEY_ID:}}
-    s3-region: ${APP_FILE_STORAGE_S3_REGION:${AWS_REGION:ap-south-2}}
+    s3-region: ${APP_FILE_STORAGE_S3_REGION:${AWS_REGION:ap-south-1}}
     s3-bucket: ${APP_FILE_STORAGE_S3_BUCKET:${AWS_S3_BUCKET:}}
     s3-secret-key: ${APP_FILE_STORAGE_S3_SECRET_KEY:${AWS_SECRET_ACCESS_KEY:}}
     fallback-to-local: ${APP_FILE_STORAGE_FALLBACK_TO_LOCAL:true}
