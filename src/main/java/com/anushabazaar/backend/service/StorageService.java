@@ -2,6 +2,7 @@ package com.anushabazaar.backend.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -54,6 +55,7 @@ public class StorageService {
         this(root, storageMode, null, s3AccessKey, s3Region, s3Bucket, s3SecretKey, fallbackToLocal);
     }
 
+    @Autowired
     public StorageService(
             @Value("${app.file-storage.local-root:uploads}") String root,
             @Value("${app.file-storage.mode:local}") String storageMode,

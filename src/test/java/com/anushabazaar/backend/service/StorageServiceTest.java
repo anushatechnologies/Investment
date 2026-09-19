@@ -61,4 +61,30 @@ class StorageServiceTest {
 
         assertThat(path).contains("target").contains("kyc").contains("profile.jpg");
     }
+
+    @Test
+    void springCanInstantiateStorageServiceViaAutowiredConstructor() {
+        try (org.springframework.context.annotation.AnnotationConfigApplicationContext context =
+                     new org.springframework.context.annotation.AnnotationConfigApplicationContext()) {
+            context.register(StorageService.class);
+            context.refresh();
+            StorageService bean = context.getBean(StorageService.class);
+            assertThat(bean).isNotNull();
+        }
+    }
+
+    @Test
+    void supabaseCustomEndpointCanBeInstantiated() throws IOException {
+        StorageService storageService = new StorageService(
+                "target/storage-service-test",
+                "s3",
+                "https://testproject.supabase.co/storage/v1/s3",
+                "test-access-key",
+                "ap-south-1",
+                "test-bucket",
+                "test-secret-key",
+                true
+        );
+        assertThat(storageService).isNotNull();
+    }
 }
